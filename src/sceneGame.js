@@ -3,13 +3,15 @@ tps.scenes.game = function(game) {
 	this.game = game;
 
 	// Initialization ---------------------------------------------------------
-	this.board = new Board(this.ROWS, this.game, game.canvas.getContext('2d'));
+	this.board = new Board(this.ROWS, this.game, game.canvas.getContext('2d'), 0, 0);
 
 	// Interface //////////////////////////////////////////////////////////////
 	this.start = function() {
+		this.game.input.onTap.add(this.onTap, this);
 	};
 
 	this.end = function() {
+		this.game.input.onTap.remove(this.onTap, this);
 
 	};
 
@@ -21,6 +23,10 @@ tps.scenes.game = function(game) {
 		if (this.board) {
 			this.board.draw(gfx);
 		}
+	};
+
+	this.onTap = function(ptr, doubleTap) {
+		this.board.stepBestPlayback();
 	};
 
 	// Implementation /////////////////////////////////////////////////////////

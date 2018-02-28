@@ -7,24 +7,248 @@
  *	1) Tree
  *	2) Bit array, where each bit represents one space in a row which can be occupied (1) or unoccupied (0).
  *	   The bit array is primarily used to support undo-redo functionality.
+ *
+ *			*		<-- Row 0, line 0
+ *					<-- Row ?, line 1
+ *		  *   *		<-- Row 1, line 2
+ *					<-- Row ?, line 3
+ *		*   *   *	<-- Row 2, line 4
+ *
+ * etc...
+ * There are 2 * rows - 1 "lines" on the board. Even-index lines contain the pegs. Odd-indexed lines are blank spacers.
+ * And the middline line is always given my "rows - 1".
+ *
  */
 
-var Board = function (rows, game, gfx) {
+// Construction ---------------------------------------------------------------
+var Board = function (rows, game, gfx, emptyRow, emptyCol) {
 	tps.utils.assert(rows > 0 && rows * (rows + 1) / 2 <= Board.MAX_BITS, "Invalid board size");
 
+	this.nodes = [];
 	this.game = game;
 	this.rows = rows;
-	this.rootNode = this.build(gfx);
+	this.moveStack = new tps.utils.Stack();
+	this.bestStack = new tps.utils.Stack();
+	this.undoStack = new tps.utils.Stack();
+	this.redoStack = new tps.utils.Stack();
+
+	this.replayStack 	= new tps.utils.Stack();
+	this.DEBUG_allMoves	= new tps.utils.Stack();
+
+	this.rootNode = this.build(emptyRow, emptyCol, gfx);
+
+	this.solve();
+
+	this.startBestPlayback();
 };
 
 Board.MAX_BITS 			= 32;
 Board.PEG_RADIUS		= 35;
 Board.SLOT_RADIUS 		= 50;
 Board.PEG_SPACING		= 10;
-Board.PEG_COLOR 		= "green";
-Board.PEG_OUTLINE_COLOR	= "white";
 
-Board.prototype.draw = function(gfx) {
+Board.DEBUG_PEG_COLOR 			= "green";
+Board.DEBUG_PEG_OUTLINE_COLOR	= "white";
+
+// Playing --------------------------------------------------------------------
+Board.prototype.addPeg = function(row, col) {
+	var node = this.nodeAt(row, col);
+	tps.utils.assert(node, "(addPeg) Invalid node!");
+
+	node.addPeg();
+};
+
+Board.prototype.removePeg = function(row, col) {
+	var node = this.nodeAt(row, col);
+	tps.utils.assert(node, "(removePeg) Invalid node!");
+
+	node.removePeg();
+};
+
+Board.prototype.nodeAt = function(row, col) {
+	// Compute index into nodeList by using the geometry of the triangular
+	// layout: the number of nodes in the first 'n' rows is n * (n + 1) / 2.
+	var index = row * (row + 1) / 2 + col;
+
+	tps.utils.assert(index >= 0 || index < this.nodes.length, "(nodeAt) Invalid node index!");
+
+	return this.nodes[index];	
+};
+
+// Solving --------------------------------------------------------------------
+Board.prototype.startBestPlayback = function() {
+	if (this.bestStack.size() > 0) {
+		this.replayStack.copy(this.bestStack);
+		this.deserialize(this.replayStack.peekBottom());
+	}
+};
+
+Board.prototype.stepBestPlayback = function() {
+	if (this.replayStack.shift()) {
+		this.deserialize(this.replayStack.peekBottom());
+	}
+};
+
+Board.prototype.solve = function(recursing) {
+	var failed = true;
+
+	if (!recursing) {
+		this.moveStack.clear();
+		this.bestStack.clear();
+		this.DEBUG_allMoves.clear();
+
+		this.moveStack.push(this.serialize());
+		this.DEBUG_allMoves.push(this.moveStack.peek());
+	}
+
+	for (var i=0; i<this.nodes.length; ++i) {
+		if (!this.nodes[i].isEmpty()) {
+			var moves = this.findMovesForNode(i);
+			if (moves) {
+				this.applyMovesAndRecurse(moves);
+				failed = false;
+			}
+		}
+	}
+
+	return failed;
+};
+
+Board.prototype.applyMovesAndRecurse = function(moves) {
+	var currentBoard = this.serialize();
+
+	for (var i=0; i<moves.length; ++i) {
+		if (!this.applyMove(moves[i])) {
+			// Didn't solve it.
+			this.solve(true);
+		}
+
+		this.moveStack.pop();
+		this.deserialize(currentBoard);
+		this.DEBUG_allMoves.push(currentBoard);
+	}
+};
+
+Board.prototype.applyMove = function(move) {
+	var solved = false;
+
+	move.src.removePeg();
+	move.jump.removePeg();
+	move.dest.addPeg();
+
+	var newBoard = this.serialize();
+	this.moveStack.push(newBoard);
+
+	this.DEBUG_allMoves.push(newBoard);
+
+	solved = this.playerHasWon();
+
+	if (solved && (this.bestStack.size() === 0 || this.moveStack.size() < this.bestStack.size())) {
+		this.bestStack.copy(this.moveStack);
+	}
+
+	return solved;
+};
+
+Board.prototype.playerHasWon = function() {
+	// Bit of math: if exactly one peg remains on the board,
+	// the bit representation of the board will be an integer
+	// power of two.
+
+	var bitArray = this.serialize();
+	var powerOfTwo = Math.log(bitArray) / Math.log(2.0);
+
+	return  powerOfTwo === Math.floor(powerOfTwo);
+};
+
+Board.prototype.findMovesForNode = function(nodeIndex) {
+	var node = this.nodes[nodeIndex];
+	var moves = [];
+
+	// Move up.
+	var leftParent = node.getLeftParent();
+	var rightParent = node.getRightParent();
+
+	if (leftParent && !leftParent.isEmpty()) {
+		var leftGrandparent = leftParent.getLeftParent();
+		if (leftGrandparent && leftGrandparent.isEmpty()) {
+			moves.push({src: node, dest: leftGrandparent, jump: leftParent});
+		}
+	}
+
+	if (rightParent && !rightParent.isEmpty()) {
+		var rightGrandparent = rightParent.getRightParent();
+		if (rightGrandparent && rightGrandparent.isEmpty()) {
+			moves.push({src: node, dest: rightGrandparent, jump: rightParent});
+		}
+	}
+
+	// Move across.
+	var leftSibling = node.getLeftSibling();
+	var rightSibling = node.getRightSibling();
+
+	if (leftSibling && !leftSibling.isEmpty()) {
+		var leftGrandsibling = leftSibling.getLeftSibling();
+		if (leftGrandsibling && leftGrandsibling.isEmpty()) {
+			moves.push({src: node, dest: leftGrandsibling, jump: leftSibling});
+		}
+	}
+
+	if (rightSibling && !rightSibling.isEmpty()) {
+		var rightGrandsibling = rightSibling.getRightSibling();
+		if (rightGrandsibling && rightGrandsibling.isEmpty()) {
+			moves.push({src: node, dest: rightGrandsibling, jump: rightSibling});
+		}
+	}
+
+	// Move down.
+	var leftChild = node.getLeftChild();
+	var rightChild = node.getRightChild();
+
+	if (leftChild && !leftChild.isEmpty()) {
+		var leftGrandchild = leftChild.getLeftChild();
+		if (leftGrandchild && leftGrandchild.isEmpty()) {
+			moves.push({src: node, dest: leftGrandchild, jump: leftChild});
+		}
+	}
+
+	if (rightChild && !rightChild.isEmpty()) {
+		var rightGrandchild = rightChild.getRightChild();
+		if (rightGrandchild && rightGrandchild.isEmpty()) {
+			moves.push({src: node, dest: rightGrandchild, jump: rightChild});
+		}
+	}
+
+
+	return moves.length ? moves : null;
+};
+
+// Serializing ----------------------------------------------------------------
+Board.prototype.serialize = function() {
+	var bitArray = 0;
+
+	for (var i=0; i<this.nodes.length; ++i) {
+		if (!this.nodes[i].isEmpty()) {
+			bitArray += 1 << i;
+		}
+	}
+
+	return bitArray;
+};
+
+Board.prototype.deserialize = function(bitArray) {
+	for (var i=0; i<this.nodes.length; ++i) {
+		if (bitArray & (1 << i)) {
+			this.nodes[i].addPeg();
+		}
+		else {
+			this.nodes[i].removePeg();
+		}
+	}
+};
+
+// Rendering ------------------------------------------------------------------
+Board.prototype.draw = function(gfx, emptyRow, emptyCol) {
 	var nodesInRow = [];
 	nodesInRow.push(this.rootNode);
 
@@ -32,66 +256,76 @@ Board.prototype.draw = function(gfx) {
 };
 
 Board.prototype.drawRow = function(nodesInRow, row, gfx) {
-	// this.drawCanvasPegs(nodesInRow, row, gfx);
+	// this.DEBUG_drawCanvasPegs(nodesInRow, row, gfx);
 };
 
 Board.prototype.canvasDrawPegAtPoint = function(gfx, point) {
 	gfx.beginPath();
-	gfx.strokeStyle = Board.PEG_OUTLINE_COLOR;
-	gfx.fillStyle = Board.PEG_COLOR; // DEBUG: "rgba(0, " + Math.floor(255 * row / this.rows) + ", 0, 255)";
+	gfx.strokeStyle = Board.DEBUG_PEG_OUTLINE_COLOR;
+	gfx.fillStyle =  Board.DEBUG_PEG_COLOR; // DEBUG: "rgba(0, " + Math.floor(255 * row / this.rows) + ", 0, 255)";
 	gfx.arc(point.x, point.y, Board.PEG_RADIUS, 0, 2.0 * Math.PI);
 	gfx.fill();
 	gfx.stroke();
 	gfx.closePath();
 };
 
-Board.prototype.build = function(gfx) {
+// Building -------------------------------------------------------------------
+Board.prototype.build = function(emptyRow, emptyCol, gfx) {
 	var slotSprite = this.game.add.sprite(0, 0, "slot_orange");
 	var pegSprite  = this.game.add.sprite(0, 0, "peg_green");
 
 	Board.SLOT_RADUIS = slotSprite.width / 2;
 	Board.PEG_RADIUS = pegSprite.width / 2;
 
-	var rootNode = new BoardNode(slotSprite, pegSprite);
+	var row = 0;
+	var col = 0;
+	var rootNode = new BoardNode(slotSprite, pegSprite, 0, 0, row === emptyRow && col === emptyCol);
 	var nodesInRow = [];
 
 	rootNode.setParents(null, null);
 	nodesInRow.push(rootNode);
 
-	this.addRow(1, nodesInRow, this.rows, gfx);
+	this.addRow(1, nodesInRow, this.rows, gfx, emptyRow, emptyCol);
 
 	return rootNode;
 };
 
-Board.prototype.addRow = function(row, previousRow, rows, gfx) {
+Board.prototype.addRow = function(row, previousRow, rows, gfx, emptyRow, emptyCol) {
 	var nodesInRow = [];
 
 	// Position elements on the previous row.
 	for (var i=0; i<previousRow.length; ++i) {
-		var point = BoardNode.getScreenCoordsForPeg(row, i, previousRow.length, this.rows, gfx.canvas.width, gfx.canvas.height);
+		var point = BoardNode.getScreenCoordsForPeg(row - 1, i, previousRow.length, this.rows, gfx.canvas.width, gfx.canvas.height);
 
 		previousRow[i].moveToScreen(point.x, point.y);
-		previousRow[i].makeVisible();
+
+		// While we are at it, build a flat list of nodes for ease of access.
+		this.nodes.push(previousRow[i]);
 	}
 
 	// Create the elements of this new row.
 	if (row < rows) {
 		for(var i=0; i<row+1; ++i) {
-			nodesInRow.push(new BoardNode(this.game.add.sprite(0, 0, "slot_orange"), this.game.add.sprite(0, 0, "peg_green")));
+			var slotSprite = this.game.add.sprite(0, 0, "slot_orange"); 
+			var pegSprite = this.game.add.sprite(0, 0, "peg_green")
+			nodesInRow.push(new BoardNode(slotSprite, pegSprite, row, i, row === emptyRow && i === emptyCol));
 		}
 
-		// Hook them up to the previous row.
+		// Hook them up.
 		for (var i=0; i<nodesInRow.length; ++i) {
 			if (i === 0) {
 				nodesInRow[i].setParents(null, previousRow[0]);
 				previousRow[i].setChildren(nodesInRow[i], nodesInRow[i + 1]);
+				nodesInRow[i].setSiblings(null, nodesInRow[i + 1]);
 			}
 			else if (i === nodesInRow.length - 1) {
 				nodesInRow[i].setParents(previousRow[previousRow.length - 1], null);
+				nodesInRow[i].setSiblings(nodesInRow[i - 1], null);
 			}
 			else {
 				nodesInRow[i].setParents(previousRow[i - 1], previousRow[i]);
 				previousRow[i].setChildren(nodesInRow[i], nodesInRow[i + 1]);
+				nodesInRow[i].setSiblings(nodesInRow[i - 1], nodesInRow[i + 1]);
 			}
 		}
 
@@ -100,7 +334,19 @@ Board.prototype.addRow = function(row, previousRow, rows, gfx) {
 };
 
 // Debug //////////////////////////////////////////////////////////////////////
-Board.prototype.drawCanvasPegs = function(nodesInRow, row, gfx) {
+Board.prototype.DEBUG_startPlayback = function() {
+	if (this.DEBUG_allMoves.size() > 0) {
+		this.deserialize(this.DEBUG_allMoves.peekBottom());
+	}
+};
+
+Board.prototype.DEBUG_stepPlayback = function() {
+	if (this.DEBUG_allMoves.shift()) {
+		this.deserialize(this.DEBUG_allMoves.peekBottom());
+	}
+};
+
+Board.prototype.DEBUG_drawCanvasPegs = function(nodesInRow, row, gfx) {
 	if (row < this.rows) {
 		var nodesInNextRow = [];
 
@@ -122,21 +368,30 @@ Board.prototype.drawCanvasPegs = function(nodesInRow, row, gfx) {
 };
 
 // Node Structure /////////////////////////////////////////////////////////////
-var BoardNode = function(spriteSlot, spritePeg) {
+var BoardNode = function(spriteSlot, spritePeg, row, col, isEmpty) {
 	this.leftChild = null;
 	this.rightChild = null;
 	this.leftParent = null;
 	this.rightParent = null;
+	this.leftSibling = null;
+	this.rightSibling = null;
+
+	this.row = row;
+	this.col = col;
 
 	this.spriteSlot = spriteSlot;
-	this.spriteSlot.visible = false;
+	this.spriteSlot.visible = true;
 	this.spriteSlot.anchor.set(0.5, 0.5);
 	this.spriteSlot.data = this;
 
 	this.spritePeg = spritePeg;
-	this.spritePeg.visible = false;
+	this.spritePeg.visible = !isEmpty;
 	this.spritePeg.anchor.set(0.5, 0.5);
 	this.spritePeg.data = this;
+};
+
+BoardNode.prototype.isEmpty = function() {
+	return !this.spritePeg || !this.spritePeg.visible;
 };
 
 BoardNode.prototype.moveToScreen = function(x, y) {
@@ -152,9 +407,22 @@ BoardNode.prototype.setParents = function(left ,right) {
 	this.rightParent = right;
 };
 
+BoardNode.prototype.setSiblings = function(left, right) {
+	this.leftSibling = left;
+	this.rightSibling = right;
+};
+
 BoardNode.prototype.setChildren = function(left, right) {
 	this.leftChild = left;
 	this.rightChild = right;
+};
+
+BoardNode.prototype.getLeftParent = function() {
+	return this.leftParent;
+};
+
+BoardNode.prototype.getRightParent = function() {
+	return this.rightParent;
 };
 
 BoardNode.prototype.getLeftChild = function() {
@@ -163,6 +431,14 @@ BoardNode.prototype.getLeftChild = function() {
 
 BoardNode.prototype.getRightChild = function() {
 	return this.rightChild;
+};
+
+BoardNode.prototype.getLeftSibling = function() {
+	return this.leftSibling;
+};
+
+BoardNode.prototype.getRightSibling = function() {
+	return this.rightSibling;
 };
 
 BoardNode.prototype.makeVisible = function() {
@@ -175,17 +451,15 @@ BoardNode.prototype.makeInvisible = function() {
 	this.spritePeg.visible = false;
 };
 
-BoardNode.getScreenCoordsForPeg = function(row, peg, rowLength, rows, screenWidth, screenHeight) {
-	//			*		<-- Row 0, line 0
-	//					<-- Row ?, line 1
-	//		  *   *		<-- Row 1, line 2
-	//					<-- Row ?, line 3
-	//		*   *   *	<-- Row 2, line 4
-	//
-	// etc...
-	// There are 2 * rows - 1 "lines" on the board. Even-index lines contain the pegs. Odd-indexed lines are blank spacers.
-	// And the middline line is always given my "rows - 1".
+BoardNode.prototype.addPeg = function() {
+	this.spritePeg.visible = true;
+};
 
+BoardNode.prototype.removePeg = function() {
+	this.spritePeg.visible = false;
+};
+
+BoardNode.getScreenCoordsForPeg = function(row, peg, rowLength, rows, screenWidth, screenHeight) {
 	var coords = {x:0, y:0};
 
 	var midLine = rows - 1;
