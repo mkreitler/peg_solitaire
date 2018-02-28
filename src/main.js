@@ -14,6 +14,7 @@ var tps = {
 	preload: function() {
 	    tps.game.load.image('peg_green', 		'./res/bitmaps/peg_green.png',		70, 70);
 	    tps.game.load.image('slot_orange', 		'./res/bitmaps/slot_orange.png',	100, 100);
+	    tps.game.load.image('spinner', 			'./res/bitmaps/spinner.png',		70, 70);
 	    // tps.game.load.image('creatures', 	'./res/bitmaps/creatures.png', 24, 24);
 
 	    tps.game.load.bitmapFont('charybdis_72', './res/fonts/charybdis_72/font.png', './res/fonts/charybdis_72/font.fnt');
@@ -48,7 +49,7 @@ var tps = {
 	},
 
 	update :function() {
-		if (!tps.errText && tps.scene && tps.scene.hasOwnProperty('update')) {
+		if (!tps.errText && tps.scene && tps.scene.update) {
 			tps.scene.update();
 		}
 	},
@@ -62,11 +63,11 @@ var tps = {
 	startScene: function(newScene) {
 		if (newScene) {
 			if (tps.scene != newScene) {
-				if (tps.scene && tps.scene.hasOwnProperty('end')) {
+				if (tps.scene && tps.scene.end) {
 					tps.scene.end();
 				}
 
-				if (newScene && newScene.hasOwnProperty('start')) {
+				if (newScene && newScene.start) {
 					newScene.start();
 				}
 

@@ -27,6 +27,8 @@ var Board = function (rows, game, gfx, emptyRow, emptyCol) {
 	this.nodes = [];
 	this.game = game;
 	this.rows = rows;
+	this.width = 0;
+	this.height = 0;
 	this.moveStack = new tps.utils.Stack();
 	this.bestStack = new tps.utils.Stack();
 	this.undoStack = new tps.utils.Stack();
@@ -286,6 +288,9 @@ Board.prototype.build = function(emptyRow, emptyCol, gfx) {
 	nodesInRow.push(rootNode);
 
 	this.addRow(1, nodesInRow, this.rows, gfx, emptyRow, emptyCol);
+
+	this.height = Math.floor(this.rows * (slotSprite.height + Board.PEG_SPACING));
+	this.width = Math.floor(this.height);
 
 	return rootNode;
 };
