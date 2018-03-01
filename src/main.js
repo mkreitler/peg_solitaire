@@ -15,6 +15,7 @@ var tps = {
 	    tps.game.load.image('peg_green', 		'./res/bitmaps/peg_green.png',		70, 70);
 	    tps.game.load.image('slot_orange', 		'./res/bitmaps/slot_orange.png',	100, 100);
 	    tps.game.load.image('spinner', 			'./res/bitmaps/spinner.png',		70, 70);
+	    tps.game.load.image('target_ring', 		'./res/bitmaps/target_ring.png',	80, 80);
 	    // tps.game.load.image('creatures', 	'./res/bitmaps/creatures.png', 24, 24);
 
 	    tps.game.load.bitmapFont('charybdis_72', './res/fonts/charybdis_72/font.png', './res/fonts/charybdis_72/font.fnt');
