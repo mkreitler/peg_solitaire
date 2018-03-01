@@ -34,20 +34,22 @@ var Board = function (rows, game, gfx, emptyRow, emptyCol) {
 	this.undoStack = new tps.utils.Stack();
 	this.redoStack = new tps.utils.Stack();
 
+	this.solutionStartTime = 0;
+	this.wantsSolution = false;
+	this.solverStack = new tps.utils.Stack();
+	this.onSolvedCallback = null;
+
 	this.replayStack 	= new tps.utils.Stack();
 	this.DEBUG_allMoves	= new tps.utils.Stack();
 
 	this.rootNode = this.build(emptyRow, emptyCol, gfx);
-
-	this.solve();
-
-	this.startBestPlayback();
 };
 
-Board.MAX_BITS 			= 32;
-Board.PEG_RADIUS		= 35;
-Board.SLOT_RADIUS 		= 50;
-Board.PEG_SPACING		= 10;
+Board.MAX_BITS 					= 32;
+Board.PEG_RADIUS				= 35;
+Board.SLOT_RADIUS 				= 50;
+Board.PEG_SPACING				= 10;
+Board.SOLVE_TIME_PER_FRAME_MS	= 17;
 
 Board.DEBUG_PEG_COLOR 			= "green";
 Board.DEBUG_PEG_OUTLINE_COLOR	= "white";
@@ -78,6 +80,13 @@ Board.prototype.nodeAt = function(row, col) {
 };
 
 // Solving --------------------------------------------------------------------
+Board.prototype.update = function() {
+	if (this.wantsSolution) {
+		this.solutionStartTime = Date.now();
+		this.updateSolution();
+	}
+};
+
 Board.prototype.startBestPlayback = function() {
 	if (this.bestStack.size() > 0) {
 		this.replayStack.copy(this.bestStack);
@@ -91,44 +100,105 @@ Board.prototype.stepBestPlayback = function() {
 	}
 };
 
-Board.prototype.solve = function(recursing) {
-	var failed = true;
+Board.prototype.solve = function(onSolvedCallback) {
+	this.wantsSolution = true;
+	this.onSolvedCallback = onSolvedCallback;
 
-	if (!recursing) {
-		this.moveStack.clear();
-		this.bestStack.clear();
-		this.DEBUG_allMoves.clear();
+	this.moveStack.clear();
+	this.bestStack.clear();
+	this.solverStack.clear();
+	this.DEBUG_allMoves.clear();
 
-		this.moveStack.push(this.serialize());
-		this.DEBUG_allMoves.push(this.moveStack.peek());
-	}
+	this.moveStack.push(this.serialize());
+	this.DEBUG_allMoves.push(this.moveStack.peek());
+	this.addSolutionTracker();
 
-	for (var i=0; i<this.nodes.length; ++i) {
-		if (!this.nodes[i].isEmpty()) {
-			var moves = this.findMovesForNode(i);
-			if (moves) {
-				this.applyMovesAndRecurse(moves);
-				failed = false;
-			}
-		}
-	}
-
-	return failed;
+	this.bringSlotsToFront();
 };
 
-Board.prototype.applyMovesAndRecurse = function(moves) {
-	var currentBoard = this.serialize();
+Board.prototype.addSolutionTracker = function() {
+	this.solverStack.push({iNode: 0, moves: [], iMove: 0, currentBoard: this.serialize(), failed: true, wantsUndo: false});
+};
 
-	for (var i=0; i<moves.length; ++i) {
-		if (!this.applyMove(moves[i])) {
-			// Didn't solve it.
-			this.solve(true);
+Board.prototype.updateSolution = function() {
+	// "st" = "solution tracker".
+	var recurse = false;
+
+	// Continue on from the last node.
+	while (this.solverStack.size() > 0 && Date.now() - this.solutionStartTime < Board.SOLVE_TIME_PER_FRAME_MS) {
+		var st = this.solverStack.peek();
+		recurse = false;
+
+		for (/* no init */; !recurse && st.iNode<this.nodes.length; ++st.iNode) {
+			if (!this.nodes[st.iNode].isEmpty()) {
+
+				st.moves = this.findMovesForNode(st.iNode);
+				if (st.moves) {
+
+					var currentBoard = this.serialize();
+					st.currentBoard = currentBoard;
+					for (/* no init*/; st.iMove<st.moves.length; ++st.iMove) {
+						if (!this.applyMove(st.moves[st.iMove])) {
+							// Didn't solve it.
+							this.addSolutionTracker();
+							st.wantsUndo = true;
+							recurse = true;
+							break;
+						}
+
+						this.moveStack.pop();
+						this.deserialize(currentBoard);
+						this.DEBUG_allMoves.push(currentBoard);
+					}
+				}
+				else {
+					// No moves remaining for this node.
+				}
+			}
 		}
 
-		this.moveStack.pop();
-		this.deserialize(currentBoard);
-		this.DEBUG_allMoves.push(currentBoard);
-	}
+		if (!recurse) {
+			// If we're here and we didn't recurse, that means we have completed
+			// processing nodes for this recursive level. We can pop the stack,
+			// return the board to the previous configuration, and pick up the
+			// analysis at that level.
+			this.solverStack.pop();
+			st = this.solverStack.peek();
+
+			if (st) {
+				this.deserialize(st.currentBoard);
+
+				if (st.wantsUndo) {
+					this.moveStack.pop();
+					this.DEBUG_allMoves.push(st.currentBoard);
+					++st.iMove;
+
+					if (st.iMove === st.moves.length) {
+						st.iNode += 1;
+						st.iMove = 0;
+					}
+
+					st.wantsUndo = false;
+				}
+			}
+			else {
+				this.wantsSolution = false;
+
+				if (this.bestStack.size() === 0) {
+					console.log("No solution found!");
+				}
+				else {
+					console.log("Best solution: " + (this.bestStack.size() - 1) + " moves.");
+					this.startBestPlayback();
+					if (this.onSolvedCallback) {
+						this.onSolvedCallback();
+					}
+				}
+
+				this.bringPegsToFront();
+			}
+		}
+	}	
 };
 
 Board.prototype.applyMove = function(move) {
@@ -259,6 +329,18 @@ Board.prototype.draw = function(gfx, emptyRow, emptyCol) {
 
 Board.prototype.drawRow = function(nodesInRow, row, gfx) {
 	// this.DEBUG_drawCanvasPegs(nodesInRow, row, gfx);
+};
+
+Board.prototype.bringSlotsToFront = function() {
+	for (var i=0; i<this.nodes.length; ++i) {
+		this.game.world.bringToTop(this.nodes[i].getSlotSprite());
+	}
+};
+
+Board.prototype.bringPegsToFront = function() {
+	for (var i=0; i<this.nodes.length; ++i) {
+		this.game.world.bringToTop(this.nodes[i].getPegSprite());
+	}
 };
 
 Board.prototype.canvasDrawPegAtPoint = function(gfx, point) {
@@ -462,6 +544,14 @@ BoardNode.prototype.addPeg = function() {
 
 BoardNode.prototype.removePeg = function() {
 	this.spritePeg.visible = false;
+};
+
+BoardNode.prototype.getSlotSprite = function() {
+	return this.spriteSlot;
+};
+
+BoardNode.prototype.getPegSprite = function() {
+	return this.spritePeg;
 };
 
 BoardNode.getScreenCoordsForPeg = function(row, peg, rowLength, rows, screenWidth, screenHeight) {
