@@ -123,6 +123,10 @@ tps.BoardNode.prototype.hideSlot = function() {
 	this.spriteSlot.visible = false;
 };
 
+tps.BoardNode.prototype.setPegAlpha = function(alpha) {
+	this.spritePeg.alpha = alpha;
+};
+
 tps.BoardNode.prototype.addPeg = function() {
 	this.spritePeg.visible = true;
 };

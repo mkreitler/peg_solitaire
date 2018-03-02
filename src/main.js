@@ -26,7 +26,8 @@ var tps = {
 	    tps.game.load.spritesheet('icon_undo',	'./res/bitmaps/icon_undo.png', 		53, 47);
 	    tps.game.load.spritesheet('icon_redo',	'./res/bitmaps/icon_redo.png', 		53, 47);
 
-	    tps.game.load.bitmapFont('maian_72', './res/fonts/font.png', './res/fonts/font.fnt');
+	    tps.game.load.bitmapFont('maian_72_blue', 	'./res/fonts/font_blue.png', './res/fonts/font_blue.fnt');
+	    tps.game.load.bitmapFont('maian_72', 		'./res/fonts/font.png', './res/fonts/font.fnt');
 	},
 
 	create: function() {
@@ -77,14 +78,14 @@ var tps = {
 		var gfx = tps.game.canvas.getContext('2d');
 
 		if (gfx) {
-			gfx.strokeStyle = "rgba(159, 64, 0, 255)";
+			// gfx.strokeStyle = "rgba(159, 64, 0, 255)";
 
-			var dx = 720;
-			var halfDy = Math.round(720 * 1024 / 768 / 2);
-			gfx.beginPath();
-			gfx.rect(gfx.canvas.width / 2 - dx / 2, gfx.canvas.height / 2 -  halfDy, dx, 2 * halfDy);
-			gfx.stroke();
-			gfx.closePath();
+			// var dx = 720;
+			// var halfDy = Math.round(720 * 1024 / 768 / 2);
+			// gfx.beginPath();
+			// gfx.rect(gfx.canvas.width / 2 - dx / 2, gfx.canvas.height / 2 -  halfDy, dx, 2 * halfDy);
+			// gfx.stroke();
+			// gfx.closePath();
 
 			if (!tps.errText && tps.scene && tps.scene['render']) {
 				tps.scene.render(gfx);

@@ -6,8 +6,10 @@ tps.scenes.game = function(game) {
 	this.updates = [];
 	this.buttons = [];
 	this.textArea = null;
+	this.tooltip = null;
 	this.stateMachine = new tps.stateMachine(this);
 	this.wantsNewGame = false;
+	this.isFirstGame = true;
 
 	tps.utils.assert(this.stateMachine, "(game constructor) Invalid state machine!");
 
@@ -19,6 +21,14 @@ tps.scenes.game = function(game) {
 	tps.switchboard.listenFor("playerLost", this);
 	tps.switchboard.listenFor("setTooltip", this);
 	tps.switchboard.listenFor("clearTooltip", this);
+	tps.switchboard.listenFor("playReleased", this);
+	tps.switchboard.listenFor("hintReleased", this);
+	tps.switchboard.listenFor("undoReleased", this);
+	tps.switchboard.listenFor("redoReleased", this);
+	tps.switchboard.listenFor("musicPressed", this);
+	tps.switchboard.listenFor("musicReleased", this);
+	tps.switchboard.listenFor("soundPressed", this);
+	tps.switchboard.listenFor("soundReleased", this);
 
 	this.board = new Board(this.ROWS, this.game, game.canvas.getContext('2d'), 0, 0);	
 	this.initUi(this.board.width, this.board.height);
@@ -27,11 +37,45 @@ tps.scenes.game = function(game) {
 };
 
 tps.scenes.game.BUTTON_BAR_SCALAR			= 1 / 5;
+tps.scenes.game.BUTTON_TEXTAREA_SCALAR		= 3 / 10;
 tps.scenes.game.CHAR_BUTTON_STARTS_INACTIVE	= "*";
 tps.scenes.game.CHAR_BUTTON_IS_TOGGLE		= "!";
 tps.scenes.game.BUTTONS 					= ["Play", "Hint*", "Undo*", "Redo*", "Music!", "Sound!"];
 
 // Message Handlers ///////////////////////////////////////////////////////////
+
+tps.scenes.game.prototype.playReleased = function() {
+	this.stateMachine.execOnState("play");
+};
+
+tps.scenes.game.prototype.hintReleased = function() {
+
+};
+
+tps.scenes.game.prototype.undoReleased = function() {
+
+};
+
+tps.scenes.game.prototype.redoReleased = function() {
+
+};
+
+tps.scenes.game.prototype.musicPressed = function() {
+	// TODO: turn off music.
+};
+
+tps.scenes.game.prototype.musicReleased = function() {
+	// TODO: turn on music.
+};
+
+tps.scenes.game.prototype.soundPressed = function() {
+	// TODO: turn off sound.
+};
+
+tps.scenes.game.prototype.soundReleased = function() {
+	// TODO: turn on sound.
+};
+
 tps.scenes.game.prototype.moveStarted = function() {
 	this.stateMachine.transitionTo(this.stateWaitForPlayerFinishMove);
 };
@@ -55,8 +99,60 @@ tps.scenes.game.prototype.playerLost = function() {
 };
 
 // States /////////////////////////////////////////////////////////////////////
-tps.scenes.game.prototype.stateWaitForMoveFX = {
+tps.scenes.game.prototype.stateRestarting = {
 	enter: function() {
+		this.setMessageUsingKey("msg_begin");
+	},
+
+	update: function() {
+		this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+	},
+},
+
+tps.scenes.game.prototype.stateWaitingForGameStart = {
+	locals: {
+		timer: 0,
+	},
+
+	play: function() {
+		this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+		this.setMessageUsingKey("msg_begin");
+	},
+
+	enter: function() {
+		if (this.isFirstGame) {
+			var locals = this.stateMachine.locals();
+			tps.utils.assert(locals, "(stateWaitingForGameStart) Invalid locals!");
+			locals.timer = 0;
+		}
+	},
+
+	update: function() {
+		if (this.isFirstGame) {
+			// TODO: play the hint particle on the "Go!" button.
+		}
+	},
+
+	exit: function() {
+		this.isFirstGame = false;
+
+		// TODO: make sure the hint particle turns off properly.
+	}
+};
+
+tps.scenes.game.prototype.stateWaitForMoveFX = {
+	locals: {
+		wantsRestart: false,
+	},
+
+	play: function() {
+		this.stateMachine.locals().wantsRestart = true;
+	},
+
+	enter: function() {
+		var locals = this.stateMachine.locals();
+		locals.wantsRestart = false;
+
 		this.board.turnOffAllNodes();
 	},
 
@@ -67,7 +163,12 @@ tps.scenes.game.prototype.stateWaitForMoveFX = {
 				this.newGame();
 			}
 			else {
-				this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+				if (this.stateMachine.locals().wantsRestart) {
+					this.restart();
+				}
+				else {
+					this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+				}
 			}
 		}
 	},
@@ -77,8 +178,13 @@ tps.scenes.game.prototype.stateWaitForMoveFX = {
 };
 
 tps.scenes.game.prototype.stateWaitForPlayerMove = {
+	play: function() {
+		this.restart();
+	},
+
 	enter: function() {
 		this.board.enableLivePegs();
+		this.board.unfadeAllPegs();
 		tps.switchboard.listenFor("moveStarted", this);
 		tps.switchboard.listenFor("moveCompleted", this);
 	},
@@ -90,6 +196,7 @@ tps.scenes.game.prototype.stateWaitForPlayerMove = {
 	exit: function() {
 		tps.switchboard.unlistenFor("moveStarted", this);
 		tps.switchboard.listenFor("moveCompleted", this);
+		this.clearMessage();
 	}
 };
 
@@ -176,12 +283,16 @@ tps.scenes.game.prototype.render = function(gfx) {
 };
 
 // Game Interface -------------------------------------------------------------
+tps.scenes.game.prototype.restart = function() {
+	this.newGame();
+	this.stateMachine.transitionTo(this.stateRestarting);
+};
+
 tps.scenes.game.prototype.newGame = function() {
 	this.board.reset();
-//	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
 	this.resetButtons();
-	this.stateMachine.transitionTo(null);
-	this.textArea.text = tps.strings.lookUp("instructions");
+	this.stateMachine.transitionTo(this.stateWaitingForGameStart);
+	this.setMessageUsingKey("instructions");
 	this.wantsNewGame = false;
 };
 
@@ -206,6 +317,7 @@ tps.scenes.game.prototype.checkPlayerInput = function() {
 // User Interface -------------------------------------------------------------
 tps.scenes.game.prototype.initUi = function(boardWidth, boardHeight) {
 	this.createTextArea();
+	this.createTooltip();
 	this.createButtons();
 	this.createSpinner();
 };
@@ -222,7 +334,7 @@ tps.scenes.game.prototype.createSpinner = function() {
 tps.scenes.game.prototype.createTextArea = function() {
 	var buttonImage = this.game.cache.getImage("buttons");
 	var textX = this.game.canvas.width / 2;
-	var textY = this.game.canvas.height / 2 + tps.height / 2 - buttonImage.height * (1 + tps.scenes.game.BUTTON_BAR_SCALAR);
+	var textY = this.game.canvas.height / 2 + tps.height / 2 - buttonImage.height * (1 + tps.scenes.game.BUTTON_TEXTAREA_SCALAR);
 
 	textX = Math.round(textX);
 	textY = Math.round(textY);
@@ -232,6 +344,21 @@ tps.scenes.game.prototype.createTextArea = function() {
 
 	this.textArea.align = "center";
 	this.textArea.anchor.set(0.5, 0.5);
+};
+
+tps.scenes.game.prototype.createTooltip = function() {
+	var buttonImage = this.game.cache.getImage("buttons");
+	var textX = this.game.canvas.width / 2;
+	var textY = this.game.canvas.height / 2 + tps.height / 2 - buttonImage.height / 2 * (1 + tps.scenes.game.BUTTON_BAR_SCALAR);
+
+	textX = Math.round(textX);
+	textY = Math.round(textY);
+
+	this.tooltip = this.game.add.bitmapText(textX, textY, "maian_72_blue");
+	tps.utils.assert(this.tooltip, "(createTooltip) Creation failed!");
+
+	this.tooltip.align = "center";
+	this.tooltip.anchor.set(0.5, 1.0);
 };
 
 tps.scenes.game.prototype.createButtons = function() {
@@ -295,6 +422,20 @@ tps.scenes.game.prototype.resetButtons = function() {
 	}
 };
 
+tps.scenes.game.prototype.setMessage = function(message) {
+	tps.utils.assert(message, "(setMessage) Invalid tooltip!");
+
+	this.textArea.text = message;
+};
+
+tps.scenes.game.prototype.setMessageUsingKey = function(key) {
+	this.setMessage(tps.strings.lookUp(key));
+};
+
+tps.scenes.game.prototype.clearMessage = function() {
+	this.textArea.text = "";
+};
+
 tps.scenes.game.prototype.updateSpinner = function() {
 	if (this.uiSpinner) {
 		this.uiSpinner.rotation += this.game.time.elapsedMS * 2.0 * Math.PI / (this.SPINNER_PERIOD * 1000.0);
@@ -314,11 +455,9 @@ tps.scenes.game.prototype.removeSpinner = function() {
 };
 
 tps.scenes.game.prototype.setTooltip = function(tooltip) {
-	tps.utils.assert(tooltip, "(setTooltip) Invalid tooltip!");
-
-	this.textArea.text = tooltip;
+	this.tooltip.text = tooltip;
 };
 
 tps.scenes.game.prototype.clearTooltip = function() {
-	this.textArea.text = "";
+	this.tooltip.text = "";
 };

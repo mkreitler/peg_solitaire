@@ -13,6 +13,8 @@
  		tt_button_sound: "Press to toggle sound.",
 
  		instructions: "Object: jump green pegs until only 1 remains.\nMethod: Tap on a peg. Tap '?' for a hint.\n\nPress 'Go!' to play.",
+
+ 		msg_begin: "Begin!",
  	},
 
  	lookUp: function(key) {

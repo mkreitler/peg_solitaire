@@ -74,11 +74,25 @@ Board.PP_LIFETIME 						= 0.5;
 Board.PP_MIN_SCALE 						= 0.25;
 Board.PP_MAX_SCALE 						= 3.0;
 Board.PP_EMIT_TIME 						= 0.02;
+Board.PEG_FULL_ALPHA 					= 1.0;
+Board.PEG_FADED_ALPHA 					= 0.5;
 
 Board.DEBUG_PEG_COLOR 			= "green";
 Board.DEBUG_PEG_OUTLINE_COLOR	= "white";
 
 // Playing --------------------------------------------------------------------
+Board.prototype.fadeAllPegs = function() {
+	for (var i=0; i<this.nodes.length; ++i) {
+		this.nodes[i].setPegAlpha(Board.PEG_FADED_ALPHA);
+	}
+};
+
+Board.prototype.unfadeAllPegs = function() {
+	for (var i=0; i<this.nodes.length; ++i) {
+		this.nodes[i].setPegAlpha(Board.PEG_FULL_ALPHA);
+	}
+};
+
 Board.prototype.turnOffAllNodes = function() {
 	for (var i=0; i<this.nodes.length; ++i) {
 		this.nodes[i].acceptInput(false);
@@ -279,6 +293,7 @@ Board.prototype.reset = function() {
 	tps.objectPool.releaseAll("moveTracker");
 	tps.objectPool.releaseAll("solutionTracker");
 	this.turnOffAllNodes();
+	this.fadeAllPegs();
 };
 
 Board.prototype.clearStacks = function() {
@@ -648,14 +663,14 @@ Board.prototype.canvasDrawPegAtPoint = function(gfx, point) {
 };
 
 Board.prototype.render =  function(gfx) {
-	var left = Math.round(this.boardGroup.position.x - this.width / 2);
-	var top = Math.round(this.boardGroup.position.y - this.height / 2);
+	// var left = Math.round(this.boardGroup.position.x - this.width / 2);
+	// var top = Math.round(this.boardGroup.position.y - this.height / 2);
 
-	gfx.strokeStyle = "blue";
-	gfx.beginPath();
-	gfx.rect(left, top, this.width, this.height);
-	gfx.stroke();
-	gfx.closePath();
+	// gfx.strokeStyle = "blue";
+	// gfx.beginPath();
+	// gfx.rect(left, top, this.width, this.height);
+	// gfx.stroke();
+	// gfx.closePath();
 };
 
 Board.prototype.getWidth = function() {

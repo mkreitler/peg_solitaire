@@ -16,6 +16,7 @@ tps.Button = function(game, type, spriteButton, spriteIcon, downMessage, upMessa
 	this.upMessage = upMessage;
 	this.tooltip = tooltip;
 	this.wantsUntoggle = false;
+	this.tooltipBlocked = false;
 
 	this.spriteButton.visible = true;
 	this.spriteIcon.visible = true;
@@ -127,6 +128,8 @@ tps.Button.prototype.clickStateUp = function() {
 			this.setStyle(tps.Button.Style.DARK, tps.Button.IconStyle.DARK);
 			this.updateState = this.clickStateDown;
 			tps.switchboard.broadcast(this.downMessage, this);
+			tps.switchboard.broadcast("buttonClickDown", this);
+			this.tooltipBlocked = true;
 		}
 		else if (!this.game.input.activePointer.isDown) {
 			// Don't like spamming the broadcast channel every frame the pointer is over
@@ -152,6 +155,7 @@ tps.Button.prototype.clickStateDown = function() {
 	if (!this.spriteButton.input.pointerDown(0) && !this.spriteIcon.input.pointerDown(0)) {
 		if (this.spriteButton.input.pointerOver(0) || this.spriteIcon.input.pointerOver(0)) {
 			tps.switchboard.broadcast(this.upMessage, this);
+			tps.switchboard.broadcast("buttonClickUp", this);
 			this.setStyle(tps.Button.Style.NORMAL, tps.Button.IconStyle.LIT);
 		}
 		else {
@@ -170,6 +174,7 @@ tps.Button.prototype.toggleStateUp = function() {
 			this.updateState = this.toggleWaitForRelease;
 
 			tps.switchboard.broadcast(this.downMessage, this);
+			tps.switchboard.broadcast("buttonToggleDown", this);
 			this.wantsUntoggle = false;
 		}
 		else if (!this.game.input.activePointer.isDown) {
@@ -216,6 +221,8 @@ tps.Button.prototype.toggleStateDown = function() {
 				this.setStyle(tps.Button.Style.NORMAL, tps.Button.IconStyle.NORMAL)
 			}
 
+			tps.switchboard.broadcast(this.upMessage, this);
+			tps.switchboard.broadcast("buttonToggleUp", this);
 			this.updateState = this.toggleStateUp;
 			this.wantsUntoggle = false;
 		}

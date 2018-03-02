@@ -60,7 +60,7 @@
  *  where all of the members are optional.
  *
  */
- 
+
  tps.stateMachine = function(owner) {
  	this.owner = owner;
  	this.currentState = null;
@@ -83,21 +83,31 @@
  	}
 };
 
- tps.stateMachine.prototype.transition = function() {
- 	if (this.nextState != this.currentState) {
- 		if (this.currentState && this.currentState.exit) {
- 			this.currentState.exit.bind(this.owner)();
- 		}
+tps.stateMachine.prototype.execOnState = function(fnName) {
+	if (this.currentState && this.currentState[fnName] && typeof(this.currentState[fnName]) === "function") {
+		this.currentState[fnName].bind(this.owner)();
+	}
+};
 
- 		this.currentState = this.nextState;
+tps.stateMachine.prototype.transition = function() {
+	if (this.nextState != this.currentState) {
+		if (this.currentState && this.currentState.exit) {
+			this.currentState.exit.bind(this.owner)();
+		}
 
- 		if (this.currentState && this.currentState.enter) {
- 			this.currentState.enter.bind(this.owner)();
- 		}
- 	}
+		this.currentState = this.nextState;
 
- 	this.wantsTransition = false;
- 	this.nextState = null;
+		if (this.currentState && this.currentState.enter) {
+			this.currentState.enter.bind(this.owner)();
+		}
+	}
+
+	this.wantsTransition = false;
+	this.nextState = null;
+};
+
+ tps.stateMachine.prototype.isState = function(testState) {
+ 	return this.currentState === testState;
  };
 
  tps.stateMachine.prototype.locals = function() {
