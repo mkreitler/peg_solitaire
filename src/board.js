@@ -330,13 +330,16 @@ Board.prototype.reset = function() {
 	this.hasSolutionToCurrentBoard = false;
 };
 
-Board.prototype.clearStacks = function() {
+Board.prototype.clearStacks = function(preserveUndo) {
 	this.moveStack.clear();
 	this.bestStack.clear();
 	this.solverStack.clear();
-	this.undoStack.clear();
-	this.redoStack.clear();
 	this.DEBUG_allMoves.clear();
+
+	if (!preserveUndo) {
+		this.undoStack.clear();
+		this.redoStack.clear();
+	}
 };
 
 Board.prototype.pegParticleStart = function(particle) {
@@ -412,7 +415,7 @@ Board.prototype.stepBestPlayback = function() {
 
 Board.prototype.solve = function() {
 	this.wantsSolution = true;
-	this.clearStacks();
+	this.clearStacks(true);
 
 	this.moveStack.push(this.serialize());
 	this.DEBUG_allMoves.push(this.moveStack.peek());
