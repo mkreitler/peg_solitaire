@@ -81,6 +81,34 @@ Board.DEBUG_PEG_COLOR 			= "green";
 Board.DEBUG_PEG_OUTLINE_COLOR	= "white";
 
 // Playing --------------------------------------------------------------------
+Board.prototype.undo = function() {
+	if (this.undoStack.size() > 0) {
+		// Save the current board in case we want to go back.
+		this.redoStack.push(this.serialize());
+
+		// Restore the previous board.
+		this.deserialize(this.undoStack.pop());
+		this.enableLivePegs();
+	}
+	else {
+		tps.switchboard.broadcast("setMessageUsingKey", "msg_cantUndo");
+	}
+};
+
+Board.prototype.redo = function() {
+	if (this.redoStack.size() > 0) {
+		// Save the current board in case we wanto to go back.
+		this.undoStack.push(this.serialize());
+
+		// Restore previous board.
+		this.deserialize(this.redoStack.pop());
+		this.enableLivePegs();
+	}
+	else {
+		tps.switchboard.broadcast("setMessageUsingKey", "msg_cantRedo");
+	}
+};
+
 Board.prototype.fadeAllPegs = function() {
 	for (var i=0; i<this.nodes.length; ++i) {
 		this.nodes[i].setPegAlpha(Board.PEG_FADED_ALPHA);
@@ -209,7 +237,9 @@ Board.prototype.clearMove = function() {
 Board.prototype.movePeg = function(move) {
 	tps.utils.assert(move, "(movePeg) Invalid move!");
 
+	this.undoStack.push(this.serialize());
 	this.applyMove(move);
+	this.redoStack.clear();
 
 	// TODO: play a sound and particle effect.
 
@@ -300,6 +330,8 @@ Board.prototype.clearStacks = function() {
 	this.moveStack.clear();
 	this.bestStack.clear();
 	this.solverStack.clear();
+	this.undoStack.clear();
+	this.redoStack.clear();
 	this.DEBUG_allMoves.clear();
 };
 

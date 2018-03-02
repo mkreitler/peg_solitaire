@@ -21,6 +21,7 @@ tps.scenes.game = function(game) {
 	tps.switchboard.listenFor("playerLost", this);
 	tps.switchboard.listenFor("setTooltip", this);
 	tps.switchboard.listenFor("clearTooltip", this);
+	tps.switchboard.listenFor("setMessageUsingKey", this);
 	tps.switchboard.listenFor("playReleased", this);
 	tps.switchboard.listenFor("hintReleased", this);
 	tps.switchboard.listenFor("undoReleased", this);
@@ -53,11 +54,11 @@ tps.scenes.game.prototype.hintReleased = function() {
 };
 
 tps.scenes.game.prototype.undoReleased = function() {
-
+	this.board.undo();
 };
 
 tps.scenes.game.prototype.redoReleased = function() {
-
+	this.board.redo();
 };
 
 tps.scenes.game.prototype.musicPressed = function() {
@@ -107,6 +108,11 @@ tps.scenes.game.prototype.stateRestarting = {
 	update: function() {
 		this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
 	},
+
+	exit: function() {
+		this.board.unfadeAllPegs();
+		this.enableAllButtons();
+	}
 },
 
 tps.scenes.game.prototype.stateWaitingForGameStart = {
@@ -135,6 +141,9 @@ tps.scenes.game.prototype.stateWaitingForGameStart = {
 
 	exit: function() {
 		this.isFirstGame = false;
+
+		this.board.unfadeAllPegs();
+		this.enableAllButtons();
 
 		// TODO: make sure the hint particle turns off properly.
 	}
@@ -184,7 +193,6 @@ tps.scenes.game.prototype.stateWaitForPlayerMove = {
 
 	enter: function() {
 		this.board.enableLivePegs();
-		this.board.unfadeAllPegs();
 		tps.switchboard.listenFor("moveStarted", this);
 		tps.switchboard.listenFor("moveCompleted", this);
 	},
@@ -419,6 +427,12 @@ tps.scenes.game.prototype.resetButtons = function() {
 		else {
 			this.buttons[i].activate();
 		}
+	}
+};
+
+tps.scenes.game.prototype.enableAllButtons = function() {
+	for (var i=0; i<this.buttons.length; ++i) {
+		this.buttons[i].activate();
 	}
 };
 

@@ -15,12 +15,13 @@
  		instructions: "Object: jump green pegs until only 1 remains.\nMethod: Tap on a peg. Tap '?' for a hint.\n\nPress 'Go!' to play.",
 
  		msg_begin: "Begin!",
+ 		msg_cantUndo: "Can't undo any more.",
+ 		msg_cantRedo: "There is nothing to redo.",
  	},
 
  	lookUp: function(key) {
  		tps.utils.assert(key && key.length > 0, "(tps.strings.lookUp) Invalid key!");
 
- 		key = key.toLowerCase();
  		var tableEntry = this.table[key];
 
  		tps.utils.assert(tableEntry, "(tps.strings.lookUp) No entry for key '" + key + "'!");
