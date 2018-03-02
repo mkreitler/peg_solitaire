@@ -46,20 +46,33 @@ var Board = function (rows, game, gfx, emptyRow, emptyCol) {
 	this.solverStack = new tps.utils.Stack();
 	this.onSolvedCallback = null;
 
+	this.playingParticles = [];
+
 	this.replayStack 	= new tps.utils.Stack();
 	this.DEBUG_allMoves	= new tps.utils.Stack();
 
 	this.rootNode = this.build(emptyRow, emptyCol, gfx);
+
+	tps.switchboard.listenFor("pegParticleStart", this);
+	tps.switchboard.listenFor("pegParticleStop", this);
 };
 
-Board.MAX_BITS 					= 32;
-Board.PEG_RADIUS				= 35;
-Board.SLOT_RADIUS 				= 50;
-Board.PEG_SPACING				= 10;
-Board.SOLVE_TIME_PER_FRAME_MS	= 17;
-Board.MIN_PEG_SCALE 			= 0.95;
-Board.MAX_PEG_SCALE 			= 1.05;
-Board.PEG_SCALE_PERIOD 			= 1.0;
+Board.MAX_BITS 							= 32;
+Board.PEG_RADIUS						= 35;
+Board.SLOT_RADIUS 						= 50;
+Board.PEG_SPACING						= 10;
+Board.SOLVE_TIME_PER_FRAME_MS			= 17;
+Board.MIN_PEG_SCALE 					= 0.95;
+Board.MAX_PEG_SCALE 					= 1.05;
+Board.PEG_SCALE_PERIOD 					= 1.0;
+Board.DEFAULT_NUM_MOVE_TRACKERS			= 100;
+Board.DEFAULT_NUM_SOLUTION_TRACKERS 	= 25;
+Board.DEFAULT_NUM_PEG_PARTICLES 		= 5;
+Board.DEFAULT_NUM_PP_SPRITES			= 3;
+Board.PP_LIFETIME 						= 0.5;
+Board.PP_MIN_SCALE 						= 0.25;
+Board.PP_MAX_SCALE 						= 3.0;
+Board.PP_EMIT_TIME 						= 0.02;
 
 Board.DEBUG_PEG_COLOR 			= "green";
 Board.DEBUG_PEG_OUTLINE_COLOR	= "white";
@@ -104,6 +117,13 @@ Board.prototype.abortCurrentMove = function() {
 Board.prototype.completeMove = function(move) {
 	this.movePeg(move);
 	tps.switchboard.broadcast("moveCompleted");
+
+	if (this.playerHasWon()) {
+		tps.switchboard.broadcast("playerWon");
+	}
+	else if (this.playerHasLost()) {
+		tps.switchboard.broadcast("playerLost");
+	}
 };
 
 Board.prototype.checkForMoveCompletion = function() {
@@ -255,6 +275,8 @@ Board.prototype.acceptInput = function(doAccept) {
 Board.prototype.reset = function() {
 	this.clearStacks();
 	this.deserialize(Math.pow(2, this.rows * (this.rows + 1) / 2) - 2);
+	tps.objectPool.releaseAll("moveTracker");
+	tps.objectPool.releaseAll("solutionTracker");
 };
 
 Board.prototype.clearStacks = function() {
@@ -264,17 +286,46 @@ Board.prototype.clearStacks = function() {
 	this.DEBUG_allMoves.clear();
 };
 
-// Solving --------------------------------------------------------------------
-Board.prototype.createPoolObjects = function() {
-	tps.objectPool.register("moveTracker", tps.Move, 100);
-	tps.objectPool.register("solutionTracker", tps.SolutionTracker, 25);
+Board.prototype.pegParticleStart = function(particle) {
+	this.playingParticles.push(particle);
 };
 
-Board.prototype.update = function() {
+Board.prototype.pegParticleStop = function(particle) {
+	tps.objectPool.release("pegParticle", particle);
+	tps.utils.removeElementFromArray(particle, this.playingParticles);
+};
+
+Board.prototype.anyParticlesPlaying = function() {
+	return this.playingParticles.length > 0;
+};
+
+// Solving --------------------------------------------------------------------
+Board.prototype.createPoolObjects = function() {
+	tps.objectPool.register("moveTracker", tps.Move, Board.DEFAULT_NUM_MOVE_TRACKERS);
+	tps.objectPool.register("solutionTracker", tps.SolutionTracker, Board.DEFAULT_NUM_SOLUTION_TRACKERS);
+	tps.objectPool.register("pegParticle", tps.PegParticle, Board.DEFAULT_NUM_PEG_PARTICLES);
+
+	var pegParticles = tps.objectPool.count("pegParticle");
+	for (var i=0; i<pegParticles; ++i) {
+		var sprites = [];
+		for (var j=0; j<Board.DEFAULT_NUM_PP_SPRITES; ++j) {
+			sprites.push(this.addSprite("peg_particle"));
+		}
+
+		var particle = tps.objectPool.request("pegParticle");
+		tps.utils.assert(particle, "(createPoolObjects) Not enough peg particles!");
+		particle.init(this.game, Board.PP_LIFETIME, Board.PP_MIN_SCALE, Board.PP_MAX_SCALE, Board.PP_EMIT_TIME, sprites);
+	}
+	tps.objectPool.releaseAll("pegParticle");
+};
+
+Board.prototype.gameUpdate = function() {
 	if (this.wantsSolution) {
 		this.solutionStartTime = Date.now();
 		this.updateSolution();
 	}
+
+	tps.objectPool.callOnUsed("pegParticle", "update");
 };
 
 Board.prototype.startBestPlayback = function() {
@@ -408,6 +459,11 @@ Board.prototype.applyMove = function(move) {
 	move.jump.removePeg();
 	move.dest.addPeg();
 
+	var pegParticle = tps.objectPool.request("pegParticle");
+	tps.utils.assert(pegParticle, "(applylMove) Invalid pegParticle!");
+	var position = move.jump.getPosition();
+	pegParticle.play(position.x, position.y);
+
 	var newBoard = this.serialize();
 	this.moveStack.push(newBoard);
 
@@ -420,6 +476,24 @@ Board.prototype.applyMove = function(move) {
 	}
 
 	return solved;
+};
+
+Board.prototype.playerHasLost = function() {
+	var playerLost = true;
+
+	for (var i=0; i<this.nodes.length; ++i) {
+		if (!this.nodes[i].isEmpty()) {
+			var moves = this.findMovesForNode(this.nodes[i].getIndex());
+
+			if (moves) {
+				tps.objectPool.release("moveTracker", moves);
+				playerLost = false;
+				break;
+			}
+		}
+	}
+
+	return playerLost;
 };
 
 Board.prototype.playerHasWon = function() {

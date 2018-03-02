@@ -131,6 +131,10 @@ tps.BoardNode.prototype.removePeg = function() {
 	this.spritePeg.visible = false;
 };
 
+tps.BoardNode.prototype.getPosition = function() {
+	return this.spritePeg.position;
+};
+
 tps.BoardNode.prototype.getIndex = function() {
 	return this.row * (this.row + 1) / 2 + this.col;
 };

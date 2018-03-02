@@ -5,6 +5,7 @@ tps.scenes.game = function(game) {
 	this.game = game;
 	this.updates = [];
 	this.stateMachine = new tps.stateMachine(this);
+	this.wantsNewGame = false;
 
 	tps.utils.assert(this.stateMachine, "(game constructor) Invalid state machine!");
 
@@ -14,6 +15,9 @@ tps.scenes.game = function(game) {
 	// Initialization ---------------------------------------------------------
 	this.board = new Board(this.ROWS, this.game, game.canvas.getContext('2d'), 0, 0);
 	this.initUi(this.board.width, this.board.height);
+
+	tps.switchboard.listenFor("playerWon", this);
+	tps.switchboard.listenFor("playerLost", this);
 
 	this.board.acceptInput(true);
 };
@@ -31,6 +35,16 @@ tps.scenes.game.prototype.moveCompleted = function() {
 	this.stateMachine.transitionTo(this.stateWaitForMoveFX);
 };
 
+tps.scenes.game.prototype.playerWon = function() {
+	console.log(">>> YOU WIN!!! <<<");
+	this.wantsNewGame = true;
+};
+
+tps.scenes.game.prototype.playerLost = function() {
+	console.log("!!! YOU LOST !!!");
+	this.wantsNewGame = true;
+};
+
 // States /////////////////////////////////////////////////////////////////////
 tps.scenes.game.prototype.stateWaitForMoveFX = {
 	enter: function() {
@@ -39,7 +53,14 @@ tps.scenes.game.prototype.stateWaitForMoveFX = {
 
 	update: function() {
 		// TODO: wait for FX to run out.
-		this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+		if (!this.board.anyParticlesPlaying()) {
+			if (this.wantsNewGame) {
+				this.newGame();
+			}
+			else {
+				this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+			}
+		}
 	},
 
 	exit: function() {
@@ -125,6 +146,8 @@ tps.scenes.game.prototype.end = function() {
 };
 
 tps.scenes.game.prototype.update = function() {
+	this.board.gameUpdate();
+
 	for (var i=0; i<this.updates.length; ++i) {
 		this.updates[i]();
 	}
@@ -142,6 +165,7 @@ tps.scenes.game.prototype.render = function(gfx) {
 tps.scenes.game.prototype.newGame = function() {
 	this.board.reset();
 	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+	this.wantsNewGame = false;
 };
 
 tps.scenes.game.prototype.onShowSolution = function(ptr, doubleTap) {

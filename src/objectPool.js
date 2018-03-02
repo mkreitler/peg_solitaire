@@ -24,6 +24,28 @@ tps.ObjectPool.prototype.register = function(typeName, fnConstructor, optStartCo
 	this.poolInfo[typeName] = objInfo;
 };
 
+tps.ObjectPool.prototype.count = function(typeName) {
+	typeName = this.validateTypeName(typeName, "ObjectPool.count");
+
+	var objInfo = this.poolInfo[typeName];
+
+	return objInfo ? objInfo.available.length : 0;
+};
+
+tps.ObjectPool.prototype.callOnUsed = function(typeName, fnName) {
+	typeName = this.validateTypeName(typeName, "applyToUsed");
+
+	var objInfo = this.poolInfo[typeName];
+	if (objInfo != null) {
+		for (var i=0; i<objInfo.used.length; ++i) {
+			var fn = objInfo.used[i][fnName];
+
+			tps.utils.assert(fn && typeof(fn) === "function", "(applyToUsed) Invalid function!");
+			fn.bind(objInfo.used[i])();
+		}
+	}
+};
+
 tps.ObjectPool.prototype.request = function(typeName) {
 	typeName = this.validateTypeName(typeName, "ObjectPool.request");
 
