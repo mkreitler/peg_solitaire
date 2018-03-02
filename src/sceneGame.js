@@ -18,18 +18,79 @@ tps.scenes.game = function(game) {
 	this.board.acceptInput(true);
 };
 
+// Message Handlers ///////////////////////////////////////////////////////////
+tps.scenes.game.prototype.moveStarted = function() {
+	this.stateMachine.transitionTo(this.stateWaitForPlayerFinishMove);
+};
+
+tps.scenes.game.prototype.moveAborted = function() {
+	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+};
+
+tps.scenes.game.prototype.moveCompleted = function() {
+	this.stateMachine.transitionTo(this.stateWaitForMoveFX);
+};
+
 // States /////////////////////////////////////////////////////////////////////
+tps.scenes.game.prototype.stateWaitForMoveFX = {
+	enter: function() {
+		this.board.turnOffAllNodes();
+	},
+
+	update: function() {
+		// TODO: wait for FX to run out.
+		this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+	},
+
+	exit: function() {
+	},
+};
+
 tps.scenes.game.prototype.stateWaitForPlayerMove = {
 	enter: function() {
+		this.board.enableLivePegs();
+		tps.switchboard.listenFor("moveStarted", this);
+		tps.switchboard.listenFor("moveCompleted", this);
+	},
+
+	update: function() {
+		this.board.checkForPlayerMove();
+	},
+
+	exit: function() {
+		tps.switchboard.unlistenFor("moveStarted", this);
+		tps.switchboard.listenFor("moveCompleted", this);
+	}
+};
+
+tps.scenes.game.prototype.stateWaitForPlayerFinishMove = {
+	enter: function() {
+		this.board.enableLivePegs();
+		this.board.enableLiveTargetSlots();
+
+		tps.switchboard.listenFor("moveAborted", this);
+		tps.switchboard.listenFor("moveCompleted", this);
+	},
+
+	update: function() {
+		this.board.pulseSelection();
+		this.board.checkForMoveCompletion();
+	},
+
+	exit: function() {
+		tps.switchboard.unlistenFor("moveAborted", this);
+		tps.switchboard.unlistenFor("moveCompleted", this);
+	},
+};
+
+tps.scenes.game.prototype.DEBUG_testSolver = {
+	enter: function() {
+		this.onSolvedState = this.stateWaitForPlayerFinishMove;
 		this.onSolve();
 		this.board.bringSlotsToFront();
 	},
 
 	update: function() {
-		// var selectedPiece = this.checkPlayerInput();
-		// if (selectedPiece && this.board.canSelectedPieceJump(selectedPiece)) {
-		// 	this.stateMachine.transitionTo(this.stateWaitForPlayerFinishMove);
-		// }
 		this.board.update();
 	},
 
@@ -39,9 +100,8 @@ tps.scenes.game.prototype.stateWaitForPlayerMove = {
 	}
 };
 
-tps.scenes.game.prototype.stateWaitForPlayerFinishMove = {
+tps.scenes.game.prototype.DEBUG_showSolution = {
 	enter: function() {
-
 	},
 
 	update: function() {
@@ -49,12 +109,9 @@ tps.scenes.game.prototype.stateWaitForPlayerFinishMove = {
 		if (selectedPiece) {
 			this.board.stepBestPlayback();
 		}
-
-//		this.board.pulseSelectedNode();
 	},
 
 	exit: function() {
-
 	},
 };
 
@@ -130,5 +187,5 @@ tps.scenes.game.prototype.removeSpinner = function() {
 	tps.utils.removeElementFromArray(this.fnSpinnerUpdate, this.updates, true);
 	this.uiSpinner.visible = false;
 
-	this.stateMachine.transitionTo(this.stateWaitForPlayerFinishMove);
+	this.stateMachine.transitionTo(this.onSolvedState);
 };

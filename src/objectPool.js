@@ -60,7 +60,7 @@ tps.ObjectPool.prototype.release = function(typeName, poolObj) {
 		typeName = this.validateTypeName(typeName, "ObjectPool.release");
 
 		var objInfo = this.poolInfo[typeName];
-		tps.utils.assert(objInfo, "(ObjectPool.release) unknown type!");
+		tps.utils.assert(objInfo, "(ObjectPool.release) unknown type " + typeName + "!");
 
 		// Often, pool objects will be contained in arrays. If we
 		// receive a single instance, we'll wrap it in an array to

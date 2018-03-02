@@ -23,7 +23,8 @@ tps.utils = {
 
 		if (!test) {
 			console.log("ASSERT FAILED: " + msg);
-			// debugger;
+			console.trace();
+			debugger;
 		}
 	},
 };

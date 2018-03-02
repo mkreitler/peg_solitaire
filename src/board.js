@@ -39,6 +39,7 @@ var Board = function (rows, game, gfx, emptyRow, emptyCol) {
 
 	this.selectTimer = 0;
 	this.selectedNode = null;
+	this.selectedMoves = null;
 
 	this.solutionStartTime = 0;
 	this.wantsSolution = false;
@@ -64,18 +65,133 @@ Board.DEBUG_PEG_COLOR 			= "green";
 Board.DEBUG_PEG_OUTLINE_COLOR	= "white";
 
 // Playing --------------------------------------------------------------------
-Board.prototype.checkForPress = function() {
+Board.prototype.turnOffAllNodes = function() {
+	for (var i=0; i<this.nodes.length; ++i) {
+		this.nodes[i].acceptInput(false);
+	}
+};
+
+Board.prototype.enableLivePegs = function() {
+	for (var i=0; i<this.nodes.length; ++i) {
+		this.nodes[i].acceptInput(!this.nodes[i].isEmpty());
+	}
+};
+
+Board.prototype.enableLiveTargetSlots = function() {
+	tps.utils.assert(this.selectedMoves, "(enableLiveTargetSlots) Invalid move selection!");
+
+	for (var i=0; i<this.selectedMoves.length; ++i) {
+		this.selectedMoves[i].dest.acceptInput(true);
+	}
+};
+
+Board.prototype.abortCurrentMove = function() {
+	if (this.selectedMoves) {
+		for (var i=0; i<this.selectedMoves.length; ++i) {
+			this.selectedMoves[i].dest.hideTarget();
+
+			this.selectedMoves[i].src.scalePeg(1.0);
+			this.selectedMoves[i].src.scaleTarget(1.0);
+			this.selectedMoves[i].dest.scalePeg(1.0);
+			this.selectedMoves[i].dest.scaleTarget(1.0);
+		}
+	}
+
+	this.clearMove();
+	tps.switchboard.broadcast("moveAborted");
+};
+
+Board.prototype.completeMove = function(move) {
+	this.movePeg(move);
+	tps.switchboard.broadcast("moveCompleted");
+};
+
+Board.prototype.checkForMoveCompletion = function() {
+	tps.utils.assert(this.selectedNode, "(checkForMoveCompletion) No selected node!");
+	tps.utils.assert(this.selectedMoves && this.selectedMoves.length > 1, "(checkForMoveCOmpletion) Not enough moves!");
+
+	for (var i=0; i<this.nodes.length; ++i) {
+		if (this.nodes[i].wasPressed()) {
+			if (!this.nodes[i].isEmpty() && this.nodes[i] !== this.selectedNode) {
+				// Player clicked on a peg other than the original one.
+				this.abortCurrentMove();
+			}
+			else {
+				for (var j=0; j<this.selectedMoves.length; ++j) {
+					if (this.nodes[i] === this.selectedMoves[j].dest) {
+						this.completeMove(this.selectedMoves[j]);
+						break;
+					}
+				}
+			}
+
+			break;
+		}
+	}
+};
+
+Board.prototype.checkForPlayerMove = function() {
+	tps.utils.assert(!this.selectedMoves, "(checkForPlayerMove) SelectedMoves is not null!");
+
 	this.selectedNode = null;
 
 	for (var i=0; i<this.nodes.length; ++i) {
 		if (this.nodes[i].wasPressed()) {
-			this.selectedNode = this.nodes[i];
-			this.selectTimer = 0;
+			this.selectedMoves = this.findMovesForNode(this.nodes[i].getIndex());
+
+			if (this.selectedMoves && this.selectedMoves.length > 0) {
+				if (this.selectedMoves.length === 1) {
+					// Only one possible move, so make it.
+					this.selectedNode = this.nodes[i];
+					this.completeMove(this.selectedMoves[0]);
+				}
+				else {
+					this.selectedNode = this.nodes[i];
+					this.selectTimer = 0;
+
+					// Turn on target cursors.
+					for (var j=0; j<this.selectedMoves.length; ++j) {
+						this.selectedMoves[j].dest.showTarget();
+					}
+
+					tps.switchboard.broadcast("moveStarted");
+				}
+			}
+
 			break;
 		}
 	}
 
 	return this.selectedNode !== null;
+};
+
+Board.prototype.clearMove = function() {
+	this.releaseMoves(this.selectedMoves);
+	this.selectedNode = null;
+	this.selectedMoves = null;
+};
+
+Board.prototype.movePeg = function(move) {
+	tps.utils.assert(move, "(movePeg) Invalid move!");
+
+	this.applyMove(move);
+
+	// TODO: play a sound and particle effect.
+
+	this.selectedNode.scalePeg(1.0);
+
+	for (var i=0; i<this.selectedMoves.length; ++i) {
+		this.selectedMoves[i].dest.scaleTarget(1.0);
+		this.selectedMoves[i].dest.hideTarget();
+	}
+
+	this.clearMove();
+
+	// TODO: check for victory.
+};
+
+Board.prototype.releaseMoves = function(moveList) {
+	tps.objectPool.release("moveTracker", moveList);
 };
 
 Board.prototype.canSelectedPieceJump = function() {
@@ -88,14 +204,21 @@ Board.prototype.canSelectedPieceJump = function() {
 	return canJump;
 };
 
-Board.prototype.pulseSelectedNode = function() {
-	if (this.selectedNode) {
-		this.selectTimer += this.game.time.elapsedMS * 0.001;
+Board.prototype.pulseSelection = function() {
+	tps.utils.assert(this.selectedNode, "(pulseSelection) Invalid node!");
+	tps.utils.assert(this.selectedMoves && this.selectedMoves.length > 1, "(pulseSelection) Invalid move list!");
 
-		var variation = Math.sin(this.selectTimer * 2.0 * Math.PI / Board.PEG_SCALE_PERIOD);
-		var amplitude = (Board.MAX_PEG_SCALE - Board.MIN_PEG_SCALE);
-		var scale = Board.MIN_PEG_SCALE + amplitude * variation;
-		this.selectedNode.scalePeg(scale);
+	this.selectTimer += this.game.time.elapsedMS * 0.001;
+
+	var variation = Math.sin(this.selectTimer * 2.0 * Math.PI / Board.PEG_SCALE_PERIOD);
+	var amplitude = (Board.MAX_PEG_SCALE - Board.MIN_PEG_SCALE);
+	var scale = Board.MIN_PEG_SCALE + amplitude * variation;
+	this.selectedNode.scalePeg(scale);
+
+	variation = Math.sin(-this.selectTimer * 2.0 * Math.PI / Board.PEG_SCALE_PERIOD);
+	scale = Board.MIN_PEG_SCALE + amplitude * variation;
+	for (var i=0; i<this.selectedMoves.length; ++i) {
+		this.selectedMoves[i].dest.scaleTarget(scale);
 	}
 };
 
@@ -488,6 +611,7 @@ Board.prototype.addRow = function(row, previousRow, rows, gfx, emptyRow, emptyCo
 		var point = tps.BoardNode.getScreenCoordsForPeg(row - 1, i, previousRow.length, this.rows, gfx.canvas.width, gfx.canvas.height);
 
 		previousRow[i].moveToScreen(point.x, point.y);
+		previousRow[i].showSlot();
 
 		// While we are at it, build a flat list of nodes for ease of access.
 		this.nodes.push(previousRow[i]);
@@ -557,177 +681,4 @@ Board.prototype.DEBUG_drawCanvasPegs = function(nodesInRow, row, gfx) {
 
 		this.drawRow(nodesInNextRow, row + 1, gfx);
 	}
-};
-
-// Node Structure /////////////////////////////////////////////////////////////
-// Nodes hold the data associated with each space on the game board.
-// This includes the graphical representation of the slots and pegs.
-tps.BoardNode = function(spriteSlot, spritePeg, spriteTarget, row, col, isEmpty) {
-	tps.utils.assert(spriteSlot, "(BoardNode constructor) Invalid slot sprite!");
-	tps.utils.assert(spritePeg, "(BoardNode constructor) Invalid peg sprite!");
-	tps.utils.assert(spriteTarget, "(BoardNode constructor) Invalid target sprite!");
-
-	this.leftChild = null;
-	this.rightChild = null;
-	this.leftParent = null;
-	this.rightParent = null;
-	this.leftSibling = null;
-	this.rightSibling = null;
-
-	this.row = row;
-	this.col = col;
-
-	this.spriteSlot = spriteSlot;
-	this.spriteSlot.visible = true;
-	this.spriteSlot.anchor.set(0.5, 0.5);
-	this.spriteSlot.data = this;
-
-	this.spritePeg = spritePeg;
-	this.spritePeg.visible = !isEmpty;
-	this.spritePeg.anchor.set(0.5, 0.5);
-	this.spritePeg.data = this;
-	this.spritePeg.inputEnabled = false;
-
-	this.spriteTarget = spriteTarget;
-	this.spriteTarget.visible = false;
-	this.spriteTarget.anchor.set(0.5, 0.5);
-	this.spriteTarget.data = this;
-	this.spriteTarget.inputEnabled = false;
-};
-
-tps.BoardNode.prototype.wasPressed = function() {
-	return this.spriteSlot.inputEnabled && this.spriteSlot.input.justPressed(0, 333);
-};
-
-tps.BoardNode.prototype.isEmpty = function() {
-	return !this.spritePeg || !this.spritePeg.visible;
-};
-
-tps.BoardNode.prototype.moveToScreen = function(x, y) {
-	this.spriteSlot.position.x = x;
-	this.spriteSlot.position.y = y;
-
-	this.spritePeg.position.x = x;
-	this.spritePeg.position.y = y;
-};
-
-tps.BoardNode.prototype.setParents = function(left ,right) {
-	this.leftParent = left;
-	this.rightParent = right;
-};
-
-tps.BoardNode.prototype.setSiblings = function(left, right) {
-	this.leftSibling = left;
-	this.rightSibling = right;
-};
-
-tps.BoardNode.prototype.setChildren = function(left, right) {
-	this.leftChild = left;
-	this.rightChild = right;
-};
-
-tps.BoardNode.prototype.getLeftParent = function() {
-	return this.leftParent;
-};
-
-tps.BoardNode.prototype.getRightParent = function() {
-	return this.rightParent;
-};
-
-tps.BoardNode.prototype.getLeftChild = function() {
-	return this.leftChild;
-};
-
-tps.BoardNode.prototype.getRightChild = function() {
-	return this.rightChild;
-};
-
-tps.BoardNode.prototype.getLeftSibling = function() {
-	return this.leftSibling;
-};
-
-tps.BoardNode.prototype.getRightSibling = function() {
-	return this.rightSibling;
-};
-
-tps.BoardNode.prototype.makeVisible = function() {
-	this.spriteSlot.visible = true;
-	this.spritePeg.visible = true;
-};
-
-tps.BoardNode.prototype.makeInvisible = function() {
-	this.spriteSlot.visible = false;
-	this.spritePeg.visible = false;
-};
-
-tps.BoardNode.prototype.addPeg = function() {
-	this.spritePeg.visible = true;
-};
-
-tps.BoardNode.prototype.removePeg = function() {
-	this.spritePeg.visible = false;
-};
-
-tps.BoardNode.prototype.getIndex = function() {
-	return this.row * (this.row + 1) / 2 + this.col;
-};
-
-tps.BoardNode.prototype.getSlotSprite = function() {
-	return this.spriteSlot;
-};
-
-tps.BoardNode.prototype.getPegSprite = function() {
-	return this.spritePeg;
-};
-
-tps.BoardNode.prototype.acceptInput = function(doAccept) {
-	this.spriteSlot.inputEnabled = doAccept;
-};
-
-tps.BoardNode.prototype.scalePeg = function(scale) {
-	this.spritePeg.scale.set(scale, scale);
-};
-
-tps.BoardNode.getScreenCoordsForPeg = function(row, peg, rowLength, rows, screenWidth, screenHeight) {
-	var coords = {x:0, y:0};
-
-	var midLine = rows - 1;
-	var curLine = 2 * row;
-	var curCol = 2.0 * (peg - (rowLength - 1) / 2);
-	coords.x = curCol * (Board.PEG_SPACING + Board.SLOT_RADIUS) + screenWidth / 2;
-	coords.y = (curLine - midLine) * (Board.PEG_SPACING + Board.SLOT_RADIUS) + screenHeight / 2;
-
-	coords.x = Math.round(coords.x);
-	coords.y = Math.round(coords.y);
-
-	return coords;
-};
-
-tps.Move = function() {
-	this.reset();
-};
-
-tps.Move.prototype.reset = function() {
-	this.src = null;
-	this.dest = null;
-	this.jump = null;
-};
-
-tps.Move.prototype.set = function(src, dest, jump) {
-	this.src = src;
-	this.dest = dest;
-	this.jump = jump;
-};
-
-tps.SolutionTracker = function() {
-	this.reset();
-};
-
-tps.SolutionTracker.prototype.reset = function() {
-	this.iNode = 0;
-	this.moves = [];
-	this.iMove = 0;
-	this.currentBoard = 0;
-	this.failed = true;
-	this.wantsUndo = false;
 };

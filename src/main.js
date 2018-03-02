@@ -50,6 +50,8 @@ var tps = {
 	},
 
 	update :function() {
+		tps.switchboard.update();
+		
 		if (!tps.errText && tps.scene && tps.scene.update) {
 			tps.scene.update();
 		}

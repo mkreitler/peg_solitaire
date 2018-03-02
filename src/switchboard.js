@@ -37,7 +37,7 @@ tps.switchboard = {
 
 		for (i=0; listeners && i<listeners.length; ++i) {
 			listener = listeners[i];
-			tps.utils.assert(listener && listener.hasOwnProperty(message), "(broadcast) invalid listener or missing handler");
+			tps.utils.assert(listener && listener[message] && typeof(listener[message]) === "function", "(broadcast) invalid listener or missing handler");
 			listener[message](data);			
 		}
 	},
@@ -93,7 +93,7 @@ tps.switchboard = {
 		this.removeArray.length = 0;
 	},
 
-	removeListenersWithMessage: function(message, listener) {
+	removeListenerWithMessage: function(message, listener) {
 		var listeners = null;
 		listeners = this.switchboard[message];
 
