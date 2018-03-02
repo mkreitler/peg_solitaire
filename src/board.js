@@ -278,6 +278,7 @@ Board.prototype.reset = function() {
 	this.deserialize(Math.pow(2, this.rows * (this.rows + 1) / 2) - 2);
 	tps.objectPool.releaseAll("moveTracker");
 	tps.objectPool.releaseAll("solutionTracker");
+	this.turnOffAllNodes();
 };
 
 Board.prototype.clearStacks = function() {

@@ -19,14 +19,14 @@ var tps = {
 	    tps.game.load.image('peg_particle', 	'./res/bitmaps/peg_particle.png',	55, 55);
 
 	    tps.game.load.spritesheet('buttons', 	'./res/bitmaps/buttons.png',		90, 90);
-	    tps.game.load.spritesheet('icon_hint',	'./res/bitmaps/icon_hint.png',		30, 53);
-	    tps.game.load.spritesheet('icon_quit',	'./res/bitmaps/icon_quit.png',		38, 37);
-	    tps.game.load.spritesheet('icon_sound',	'./res/bitmaps/icon_sound.png',		54, 52);
-	    tps.game.load.spritesheet('icon_music',	'./res/bitmaps/icon_music.png',		35, 53);
+	    tps.game.load.spritesheet('icon_hint',	'./res/bitmaps/icon_hint.png',		30, 54);
+	    tps.game.load.spritesheet('icon_play',	'./res/bitmaps/icon_play.png',		75, 38);
+	    tps.game.load.spritesheet('icon_sound',	'./res/bitmaps/icon_sound.png',		53, 51);
+	    tps.game.load.spritesheet('icon_music',	'./res/bitmaps/icon_music.png',		42, 54);
 	    tps.game.load.spritesheet('icon_undo',	'./res/bitmaps/icon_undo.png', 		53, 47);
 	    tps.game.load.spritesheet('icon_redo',	'./res/bitmaps/icon_redo.png', 		53, 47);
 
-	    tps.game.load.bitmapFont('charybdis_72', './res/fonts/charybdis_72/font.png', './res/fonts/charybdis_72/font.fnt');
+	    tps.game.load.bitmapFont('maian_72', './res/fonts/font.png', './res/fonts/font.fnt');
 	},
 
 	create: function() {
@@ -94,7 +94,7 @@ var tps = {
 	createClickButton: function(info) {
 		tps.utils.assert(info && info.iconName && info.msgPressed && info.msgReleased && info.tooltipKey && info.owner && info.ownerKey, "(createClickButton) Invalid parameters!");
 
-		var button = new tps.Button(this.game, tps.Button.Style.CLICK, this.game.add.sprite(0, 0, "buttons"), this.game.add.sprite(0, 0, info.iconName), info.msgPressed, info.msgReleased, tps.strings.lookup(info.tooltipKey));
+		var button = new tps.Button(this.game, tps.Button.Type.CLICK, this.game.add.sprite(0, 0, "buttons"), this.game.add.sprite(0, 0, info.iconName), info.msgPressed, info.msgReleased, tps.strings.lookUp(info.tooltipKey));
 
 		info.owner[info.ownerKey] = button;
 	},

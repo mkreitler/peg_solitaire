@@ -4,6 +4,8 @@ tps.scenes.game = function(game) {
 
 	this.game = game;
 	this.updates = [];
+	this.buttons = [];
+	this.textArea = null;
 	this.stateMachine = new tps.stateMachine(this);
 	this.wantsNewGame = false;
 
@@ -15,6 +17,8 @@ tps.scenes.game = function(game) {
 	// Initialization ---------------------------------------------------------
 	tps.switchboard.listenFor("playerWon", this);
 	tps.switchboard.listenFor("playerLost", this);
+	tps.switchboard.listenFor("setTooltip", this);
+	tps.switchboard.listenFor("clearTooltip", this);
 
 	this.board = new Board(this.ROWS, this.game, game.canvas.getContext('2d'), 0, 0);	
 	this.initUi(this.board.width, this.board.height);
@@ -23,6 +27,7 @@ tps.scenes.game = function(game) {
 };
 
 tps.scenes.game.BUTTON_BAR_SCALAR		= 1 / 5;
+tps.scenes.game.BUTTONS 				= ["Play", "Hint*", "Undo*", "Redo*", "Music", "Sound"];
 
 // Message Handlers ///////////////////////////////////////////////////////////
 tps.scenes.game.prototype.moveStarted = function() {
@@ -150,6 +155,10 @@ tps.scenes.game.prototype.end = function() {
 tps.scenes.game.prototype.update = function() {
 	this.board.gameUpdate();
 
+	for (var i=0; i<this.buttons.length; ++i) {
+		this.buttons[i].update();
+	}
+
 	for (var i=0; i<this.updates.length; ++i) {
 		this.updates[i]();
 	}
@@ -167,7 +176,10 @@ tps.scenes.game.prototype.render = function(gfx) {
 // Game Interface -------------------------------------------------------------
 tps.scenes.game.prototype.newGame = function() {
 	this.board.reset();
-	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+//	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+	this.resetButtons();
+	this.stateMachine.transitionTo(null);
+	this.textArea.text = tps.strings.lookUp("instructions");
 	this.wantsNewGame = false;
 };
 
@@ -191,14 +203,33 @@ tps.scenes.game.prototype.checkPlayerInput = function() {
 
 // User Interface -------------------------------------------------------------
 tps.scenes.game.prototype.initUi = function(boardWidth, boardHeight) {
+	this.createTextArea();
+	this.createButtons();
+	this.createSpinner();
+};
+
+tps.scenes.game.prototype.createSpinner = function() {
 	this.uiSpinner = this.game.add.sprite(0, 0, "spinner");
 
 	this.uiSpinner.anchor.set(0.5, 0.5);
-	this.uiSpinner.x = this.game.canvas.width / 2 - boardWidth / 2;
-	this.uiSpinner.y = this.game.canvas.height / 2 - boardHeight / 2;
+	this.uiSpinner.x = this.textArea.position.x;
+	this.uiSpinner.y = this.textArea.position.y;
 	this.uiSpinner.visible = false;
+};
 
-	this.createButtons();
+tps.scenes.game.prototype.createTextArea = function() {
+	var buttonImage = this.game.cache.getImage("buttons");
+	var textX = this.game.canvas.width / 2;
+	var textY = this.game.canvas.height / 2 + tps.height / 2 - buttonImage.height * (1 + tps.scenes.game.BUTTON_BAR_SCALAR);
+
+	textX = Math.round(textX);
+	textY = Math.round(textY);
+
+	this.textArea = this.game.add.bitmapText(textX, textY, "maian_72");
+	tps.utils.assert(this.textArea, "(createTextArea) Creation failed!");
+
+	this.textArea.align = "center";
+	this.textArea.anchor.set(0.5, 0.5);
 };
 
 tps.scenes.game.prototype.createButtons = function() {
@@ -207,20 +238,20 @@ tps.scenes.game.prototype.createButtons = function() {
 	var buttonImage = this.game.cache.getImage("buttons");
 	tps.utils.assert(buttonImage, "Couldn't find buttons!");	
 
-	var buttons = ["Music", "Sound", "Undo", "Redo", "Hint", "Quit"];
-	var buttonSpacingX = buttonImage.width * tps.scenes.game.BUTTON_BAR_SCALAR;
-	var xWidth = buttons.length * buttonImage.width + (buttons.length - 1) * buttonSpacingX;
+	buttonSpacingX = buttonImage.width * tps.scenes.game.BUTTON_BAR_SCALAR;
+	var xWidth = tps.scenes.game.BUTTONS.length * buttonImage.width + (tps.scenes.game.BUTTONS.length - 1) * buttonSpacingX;
 	var originX = this.game.canvas.width / 2 - xWidth / 2;
 
-	// The button image contains two buttons stacked vertically,
+	// The button image contains two tps.scenes.game.BUTTONS stacked vertically,
 	// so we must divide its height by an additional factor if 2.
-	var buttonSpacingY = (buttonImage.height / 2) * tps.scenes.game.BUTTON_BAR_SCALAR 
+	buttonSpacingY = (buttonImage.height / 2) * tps.scenes.game.BUTTON_BAR_SCALAR 
 	var buttonOffsetY = (buttonImage.height / 2) / 2 + buttonSpacingY;
 	var originY = Math.round(this.game.canvas.height / 2 + tps.height / 2 - buttonOffsetY);
 
-	for (var i=0; i<buttons.length; ++i) {
-		var B = buttons[i];
-		var b = buttons[i].toLowerCase();
+	for (var i=0; i<tps.scenes.game.BUTTONS.length; ++i) {
+		var deactivate = tps.scenes.game.BUTTONS[i].indexOf("*") >= 0;
+		var B = tps.scenes.game.BUTTONS[i].replace("*", "");
+		var b = B.toLowerCase();
 		var buttonParams = {iconName: "icon_" + b, msgPressed: b + "Pressed", msgReleased: b + "Released", tooltipKey: "tt_button_" + b, owner: this, ownerKey: "button" + B};
 		this["button" + B] = null;
 		tps.switchboard.broadcast("createClickButton", buttonParams);
@@ -229,6 +260,27 @@ tps.scenes.game.prototype.createButtons = function() {
 		var x = Math.round(originX + buttonImage.width / 2 + i * (buttonImage.width + buttonSpacingX));
 		var y = originY;
 		button.moveTo(x, y);
+
+		if (deactivate) {
+			button.deactivate();
+			button.setData(true);
+		}
+		else {
+			button.setData(false);
+		}
+
+		this.buttons.push(button);
+	}
+};
+
+tps.scenes.game.prototype.resetButtons = function() {
+	for (var i=0; i<this.buttons.length; ++i) {
+		if (this.buttons[i].getData()) {
+			this.buttons[i].deactivate();
+		}
+		else {
+			this.buttons[i].activate();
+		}
 	}
 };
 
@@ -248,4 +300,14 @@ tps.scenes.game.prototype.removeSpinner = function() {
 	this.uiSpinner.visible = false;
 
 	this.stateMachine.transitionTo(this.onSolvedState);
+};
+
+tps.scenes.game.prototype.setTooltip = function(tooltip) {
+	tps.utils.assert(tooltip, "(setTooltip) Invalid tooltip!");
+
+	this.textArea.text = tooltip;
+};
+
+tps.scenes.game.prototype.clearTooltip = function() {
+	this.textArea.text = "";
 };
