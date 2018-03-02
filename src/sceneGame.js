@@ -10,6 +10,7 @@ tps.scenes.game = function(game) {
 	this.stateMachine = new tps.stateMachine(this);
 	this.wantsNewGame = false;
 	this.isFirstGame = true;
+	this.wantsHint = false;
 
 	tps.utils.assert(this.stateMachine, "(game constructor) Invalid state machine!");
 
@@ -44,13 +45,28 @@ tps.scenes.game.CHAR_BUTTON_IS_TOGGLE		= "!";
 tps.scenes.game.BUTTONS 					= ["Play", "Hint*", "Undo*", "Redo*", "Music!", "Sound!"];
 
 // Message Handlers ///////////////////////////////////////////////////////////
+tps.scenes.game.prototype.onSolutionFound = function() {
+	this.setMessageUsingKey("msg_tryHint*");
+	this.removeSpinner();
+	this.enableAllButtons();
+
+	this.board.playBackHint();
+	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+};
+
+tps.scenes.game.prototype.onNoSolutionFound = function() {
+	this.removeSpinner();
+	this.enableAllButtons();
+	this.setMessageUsingKey("msg_undoMoves*");
+	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+};
 
 tps.scenes.game.prototype.playReleased = function() {
 	this.stateMachine.execOnState("play");
 };
 
 tps.scenes.game.prototype.hintReleased = function() {
-
+	this.wantsHint = true;
 };
 
 tps.scenes.game.prototype.undoReleased = function() {
@@ -186,6 +202,22 @@ tps.scenes.game.prototype.stateWaitForMoveFX = {
 	},
 };
 
+tps.scenes.game.prototype.stateComputeSolution = {
+	enter: function() {
+		tps.switchboard.listenFor("onSolutionFound", this);
+		tps.switchboard.listenFor("onNoSolutionFound", this);
+
+		this.disableAllButtons();
+		this.board.solve();
+		this.addSpinner();
+	},
+
+	exit: function() {
+		tps.switchboard.unlistenFor("onSolutionFound", this);
+		tps.switchboard.unlistenFor("onNoSolutionFound", this);
+	},
+};
+
 tps.scenes.game.prototype.stateWaitForPlayerMove = {
 	play: function() {
 		this.restart();
@@ -198,12 +230,24 @@ tps.scenes.game.prototype.stateWaitForPlayerMove = {
 	},
 
 	update: function() {
-		this.board.checkForPlayerMove();
+		if (this.wantsHint) {
+			this.wantsHint = false;
+
+			if (this.board.hasSolution()) {
+				this.board.stepBestPlayback();
+			}
+			else {
+				this.stateMachine.transitionTo(this.stateComputeSolution);
+			}
+		}
+		else {
+			this.board.checkForPlayerMove();
+		}
 	},
 
 	exit: function() {
 		tps.switchboard.unlistenFor("moveStarted", this);
-		tps.switchboard.listenFor("moveCompleted", this);
+		tps.switchboard.unlistenFor("moveCompleted", this);
 		this.clearMessage();
 	}
 };
@@ -228,6 +272,7 @@ tps.scenes.game.prototype.stateWaitForPlayerFinishMove = {
 	},
 };
 
+// TODO: Remove.
 tps.scenes.game.prototype.DEBUG_testSolver = {
 	enter: function() {
 		this.onSolvedState = this.stateWaitForPlayerFinishMove;
@@ -302,6 +347,7 @@ tps.scenes.game.prototype.newGame = function() {
 	this.stateMachine.transitionTo(this.stateWaitingForGameStart);
 	this.setMessageUsingKey("instructions");
 	this.wantsNewGame = false;
+	this.wantsHint = false;
 };
 
 tps.scenes.game.prototype.onShowSolution = function(ptr, doubleTap) {
@@ -311,10 +357,11 @@ tps.scenes.game.prototype.onShowSolution = function(ptr, doubleTap) {
 	// this.board.stepBestPlayback();
 };
 
-tps.scenes.game.prototype.onSolve = function() {
-	this.board.solve(this.removeSpinner.bind(this));
-	this.addSpinner();
-};
+// TODO: Remove
+// tps.scenes.game.prototype.onSolve = function() {
+// 	this.board.solve();
+// 	this.addSpinner();
+// };
 
 // Implementation /////////////////////////////////////////////////////////////
 // User Input -----------------------------------------------------------------
@@ -416,6 +463,12 @@ tps.scenes.game.prototype.createButtons = function() {
 		}
 
 		this.buttons.push(button);
+	}
+};
+
+tps.scenes.game.prototype.disableAllButtons = function() {
+	for (var i=0; i<this.buttons.length; ++i) {
+		this.buttons[i].deactivate();
 	}
 };
 

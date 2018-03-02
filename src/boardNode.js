@@ -177,33 +177,3 @@ tps.BoardNode.getScreenCoordsForPeg = function(row, peg, rowLength, rows, screen
 
 	return coords;
 };
-
-tps.Move = function() {
-	this.reset();
-};
-
-tps.Move.prototype.reset = function() {
-	this.src = null;
-	this.dest = null;
-	this.jump = null;
-};
-
-tps.Move.prototype.set = function(src, dest, jump) {
-	this.src = src;
-	this.dest = dest;
-	this.jump = jump;
-};
-
-tps.SolutionTracker = function() {
-	this.moves = [];
-	this.reset();
-};
-
-tps.SolutionTracker.prototype.reset = function() {
-	this.iNode = 0;
-	this.moves.length = 0;
-	this.iMove = 0;
-	this.currentBoard = 0;
-	this.failed = true;
-	this.wantsUndo = false;
-};

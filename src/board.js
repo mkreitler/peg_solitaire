@@ -45,7 +45,7 @@ var Board = function (rows, game, gfx, emptyRow, emptyCol) {
 	this.solutionStartTime = 0;
 	this.wantsSolution = false;
 	this.solverStack = new tps.utils.Stack();
-	this.onSolvedCallback = null;
+	this.hasSolutionToCurrentBoard = false;
 
 	this.playingParticles = [];
 
@@ -89,6 +89,7 @@ Board.prototype.undo = function() {
 		// Restore the previous board.
 		this.deserialize(this.undoStack.pop());
 		this.enableLivePegs();
+		this.hasSolutionToCurrentBoard = false;
 	}
 	else {
 		tps.switchboard.broadcast("setMessageUsingKey", "msg_cantUndo");
@@ -103,6 +104,7 @@ Board.prototype.redo = function() {
 		// Restore previous board.
 		this.deserialize(this.redoStack.pop());
 		this.enableLivePegs();
+		this.hasSolutionToCurrentBoard = false;
 	}
 	else {
 		tps.switchboard.broadcast("setMessageUsingKey", "msg_cantRedo");
@@ -240,6 +242,7 @@ Board.prototype.movePeg = function(move) {
 	this.undoStack.push(this.serialize());
 	this.applyMove(move);
 	this.redoStack.clear();
+	this.hasSolutionToCurrentBoard = false;
 
 	// TODO: play a sound and particle effect.
 
@@ -324,6 +327,7 @@ Board.prototype.reset = function() {
 	tps.objectPool.releaseAll("solutionTracker");
 	this.turnOffAllNodes();
 	this.fadeAllPegs();
+	this.hasSolutionToCurrentBoard = false;
 };
 
 Board.prototype.clearStacks = function() {
@@ -349,6 +353,10 @@ Board.prototype.anyParticlesPlaying = function() {
 };
 
 // Solving --------------------------------------------------------------------
+Board.prototype.hasSolution = function() {
+	return this.hasSolutionToCurrentBoard;
+};
+
 Board.prototype.createPoolObjects = function() {
 	tps.objectPool.register("moveTracker", tps.Move, Board.DEFAULT_NUM_MOVE_TRACKERS);
 	tps.objectPool.register("solutionTracker", tps.SolutionTracker, Board.DEFAULT_NUM_SOLUTION_TRACKERS);
@@ -380,20 +388,30 @@ Board.prototype.gameUpdate = function() {
 Board.prototype.startBestPlayback = function() {
 	if (this.bestStack.size() > 0) {
 		this.replayStack.copy(this.bestStack);
-		this.deserialize(this.replayStack.peekBottom());
+
+		var boardConfig =  this.replayStack.peekBottom();
+		this.deserialize(boardConfig);
 	}
 };
 
 Board.prototype.stepBestPlayback = function() {
 	if (this.replayStack.shift()) {
-		this.deserialize(this.replayStack.peekBottom());
+		this.undoStack.push(this.serialize());
+
+		var boardConfig = this.replayStack.peekBottom();
+		this.deserialize(boardConfig);
+
+		if (this.replayStack.size() > 1) {
+			tps.switchboard.broadcast("setMessageUsingKey", "msg_tryHint*");
+		}
+		else if (this.replayStack.size() === 1) {
+			tps.switchboard.broadcast("setMessageUsingKey", "msg_solved*");
+		}
 	}
 };
 
-Board.prototype.solve = function(onSolvedCallback) {
+Board.prototype.solve = function() {
 	this.wantsSolution = true;
-	this.onSolvedCallback = onSolvedCallback;
-
 	this.clearStacks();
 
 	this.moveStack.push(this.serialize());
@@ -409,6 +427,15 @@ Board.prototype.addSolutionTracker = function() {
 
 	st.currentBoard = this.serialize();
 	this.solverStack.push(st);
+};
+
+Board.prototype.playBackHint = function() {
+	tps.utils.assert(this.hasSolutionToCurrentBoard, "(playBackHint) No solution available!");
+
+	// Save the current configuration to the undo stack, but don't
+	// display it to the user (she is already looking at it).
+	this.undoStack.push(this.bestStack.pop());
+	this.startBestPlayback();
 };
 
 Board.prototype.updateSolution = function() {
@@ -485,17 +512,15 @@ Board.prototype.updateSolution = function() {
 				tps.objectPool.releaseAll("moveTracker");
 				tps.objectPool.releaseAll("solutionTracker");
 
+				this.bringPegsToFront();
+
 				if (this.bestStack.size() === 0) {
-					console.log("No solution found!");
+					tps.switchboard.broadcast("onNoSolutionFound");
 				}
 				else {
-					console.log("Best solution: " + (this.bestStack.size() - 1) + " moves.");
-					if (this.onSolvedCallback) {
-						this.onSolvedCallback();
-					}
+					this.hasSolutionToCurrentBoard = true;
+					tps.switchboard.broadcast("onSolutionFound");
 				}
-
-				this.bringPegsToFront();
 			}
 		}
 	}	
@@ -508,10 +533,12 @@ Board.prototype.applyMove = function(move) {
 	move.jump.removePeg();
 	move.dest.addPeg();
 
-	var pegParticle = tps.objectPool.request("pegParticle");
-	tps.utils.assert(pegParticle, "(applylMove) Invalid pegParticle!");
-	var position = move.jump.getPosition();
-	pegParticle.play(position.x, position.y);
+	if (!this.wantsSolution) { // <-- 'wantsSolution' === true indicates the board is in "solve" mode.
+		var pegParticle = tps.objectPool.request("pegParticle");
+		tps.utils.assert(pegParticle, "(applylMove) Invalid pegParticle!");
+		var position = move.jump.getPosition();
+		pegParticle.play(position.x, position.y);
+	}
 
 	var newBoard = this.serialize();
 	this.moveStack.push(newBoard);
@@ -825,4 +852,37 @@ Board.prototype.DEBUG_drawCanvasPegs = function(nodesInRow, row, gfx) {
 
 		this.drawRow(nodesInNextRow, row + 1, gfx);
 	}
+};
+
+// Solution Structures --------------------------------------------------------
+tps.Move = function() {
+	this.reset();
+};
+
+tps.Move.prototype.reset = function() {
+	this.src = null;
+	this.dest = null;
+	this.jump = null;
+};
+
+tps.Move.prototype.set = function(src, dest, jump) {
+	this.src = src;
+	this.dest = dest;
+	this.jump = jump;
+};
+
+tps.SolutionTracker = function() {
+	this.moves = null;
+	this.reset();
+};
+
+tps.SolutionTracker.prototype.reset = function() {
+	this.iNode = 0;
+	// tps.utils.assert(this.moves, "(SolutionTracker.reset) Unknown context!");
+
+	this.moves = null;
+	this.iMove = 0;
+	this.currentBoard = 0;
+	this.failed = true;
+	this.wantsUndo = false;
 };
