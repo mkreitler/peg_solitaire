@@ -13,14 +13,16 @@ tps.scenes.game = function(game) {
 	this.fnSpinnerUpdate = this.updateSpinner.bind(this);
 
 	// Initialization ---------------------------------------------------------
-	this.board = new Board(this.ROWS, this.game, game.canvas.getContext('2d'), 0, 0);
-	this.initUi(this.board.width, this.board.height);
-
 	tps.switchboard.listenFor("playerWon", this);
 	tps.switchboard.listenFor("playerLost", this);
 
+	this.board = new Board(this.ROWS, this.game, game.canvas.getContext('2d'), 0, 0);	
+	this.initUi(this.board.width, this.board.height);
+
 	this.board.acceptInput(true);
 };
+
+tps.scenes.game.BUTTON_BAR_SCALAR		= 1 / 5;
 
 // Message Handlers ///////////////////////////////////////////////////////////
 tps.scenes.game.prototype.moveStarted = function() {
@@ -158,6 +160,7 @@ tps.scenes.game.prototype.update = function() {
 tps.scenes.game.prototype.render = function(gfx) {
 	if (this.board) {
 		this.board.draw(gfx);
+		this.board.render(gfx);
 	}
 };
 
@@ -194,6 +197,39 @@ tps.scenes.game.prototype.initUi = function(boardWidth, boardHeight) {
 	this.uiSpinner.x = this.game.canvas.width / 2 - boardWidth / 2;
 	this.uiSpinner.y = this.game.canvas.height / 2 - boardHeight / 2;
 	this.uiSpinner.visible = false;
+
+	this.createButtons();
+};
+
+tps.scenes.game.prototype.createButtons = function() {
+	this.buttonGroup = this.game.add.group();
+
+	var buttonImage = this.game.cache.getImage("buttons");
+	tps.utils.assert(buttonImage, "Couldn't find buttons!");	
+
+	var buttons = ["Music", "Sound", "Undo", "Redo", "Hint", "Quit"];
+	var buttonSpacingX = buttonImage.width * tps.scenes.game.BUTTON_BAR_SCALAR;
+	var xWidth = buttons.length * buttonImage.width + (buttons.length - 1) * buttonSpacingX;
+	var originX = this.game.canvas.width / 2 - xWidth / 2;
+
+	// The button image contains two buttons stacked vertically,
+	// so we must divide its height by an additional factor if 2.
+	var buttonSpacingY = (buttonImage.height / 2) * tps.scenes.game.BUTTON_BAR_SCALAR 
+	var buttonOffsetY = (buttonImage.height / 2) / 2 + buttonSpacingY;
+	var originY = Math.round(this.game.canvas.height / 2 + tps.height / 2 - buttonOffsetY);
+
+	for (var i=0; i<buttons.length; ++i) {
+		var B = buttons[i];
+		var b = buttons[i].toLowerCase();
+		var buttonParams = {iconName: "icon_" + b, msgPressed: b + "Pressed", msgReleased: b + "Released", tooltipKey: "tt_button_" + b, owner: this, ownerKey: "button" + B};
+		this["button" + B] = null;
+		tps.switchboard.broadcast("createClickButton", buttonParams);
+
+		var button = this["button" + B];
+		var x = Math.round(originX + buttonImage.width / 2 + i * (buttonImage.width + buttonSpacingX));
+		var y = originY;
+		button.moveTo(x, y);
+	}
 };
 
 tps.scenes.game.prototype.updateSpinner = function() {

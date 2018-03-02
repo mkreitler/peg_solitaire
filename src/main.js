@@ -3,8 +3,8 @@ var tps = {
 	screenHeight: window.innerHeight * window.devicePixelRatio, // window.screen.height * window.devicePixelRatio,
 	baseWidth: 960,
 	baseHeight: 640,
-	width: 0,
-	height: 0,
+	width: 720,
+	height: Math.round(720 * 1024 / 768 / 2) * 2,
 	scale: 1,
 	scenes: {},
 	game: null,
@@ -17,7 +17,14 @@ var tps = {
 	    tps.game.load.image('spinner', 			'./res/bitmaps/spinner.png',		70, 70);
 	    tps.game.load.image('target_ring', 		'./res/bitmaps/target_ring.png',	80, 80);
 	    tps.game.load.image('peg_particle', 	'./res/bitmaps/peg_particle.png',	55, 55);
-	    // tps.game.load.image('creatures', 	'./res/bitmaps/creatures.png', 24, 24);
+
+	    tps.game.load.spritesheet('buttons', 	'./res/bitmaps/buttons.png',		90, 90);
+	    tps.game.load.spritesheet('icon_hint',	'./res/bitmaps/icon_hint.png',		30, 53);
+	    tps.game.load.spritesheet('icon_quit',	'./res/bitmaps/icon_quit.png',		38, 37);
+	    tps.game.load.spritesheet('icon_sound',	'./res/bitmaps/icon_sound.png',		54, 52);
+	    tps.game.load.spritesheet('icon_music',	'./res/bitmaps/icon_music.png',		35, 53);
+	    tps.game.load.spritesheet('icon_undo',	'./res/bitmaps/icon_undo.png', 		53, 47);
+	    tps.game.load.spritesheet('icon_redo',	'./res/bitmaps/icon_redo.png', 		53, 47);
 
 	    tps.game.load.bitmapFont('charybdis_72', './res/fonts/charybdis_72/font.png', './res/fonts/charybdis_72/font.fnt');
 	},
@@ -26,7 +33,9 @@ var tps = {
 		var key = null;
 		var ctxt = null;
 
-		// tps.createGfxBuffer();
+		var dx = tps.width;
+		var halfDy = Math.round(tps.height / 2);
+
 		tps.game.stage.backgroundColor = 0x000000;
 
 		tps.utils.assert(tps.scale > 0, "Device screen too small to support app!");
@@ -38,6 +47,11 @@ var tps = {
 		tps.switchboard.listenFor('addKeyAction', tps);
 		tps.switchboard.listenFor('removeKeyAction', tps);
 		tps.switchboard.listenFor('loadScene', tps);
+		tps.switchboard.listenFor('createClickButton', tps);
+
+		// HACK: force an update of the switchboard so the above listeners will get
+		// added tright away.
+		tps.switchboard.update();
 
 		for (key in tps.scenes) {
 			// Create an object using the constructor stored in the 'scenes' array.
@@ -59,9 +73,30 @@ var tps = {
 	},
 
 	render: function() {
-		if (!tps.errText && tps.scene && tps.scene.hasOwnProperty('render')) {
-			tps.scene.render(tps.game.canvas.getContext('2d'));
+		var gfx = tps.game.canvas.getContext('2d');
+
+		if (gfx) {
+			gfx.strokeStyle = "rgba(159, 64, 0, 255)";
+
+			var dx = 720;
+			var halfDy = Math.round(720 * 1024 / 768 / 2);
+			gfx.beginPath();
+			gfx.rect(gfx.canvas.width / 2 - dx / 2, gfx.canvas.height / 2 -  halfDy, dx, 2 * halfDy);
+			gfx.stroke();
+			gfx.closePath();
+
+			if (!tps.errText && tps.scene && tps.scene['render']) {
+				tps.scene.render(gfx);
+			}
 		}
+	},
+
+	createClickButton: function(info) {
+		tps.utils.assert(info && info.iconName && info.msgPressed && info.msgReleased && info.tooltipKey && info.owner && info.ownerKey, "(createClickButton) Invalid parameters!");
+
+		var button = new tps.Button(this.game, tps.Button.Style.CLICK, this.game.add.sprite(0, 0, "buttons"), this.game.add.sprite(0, 0, info.iconName), info.msgPressed, info.msgReleased, tps.strings.lookup(info.tooltipKey));
+
+		info.owner[info.ownerKey] = button;
 	},
 
 	startScene: function(newScene) {
@@ -78,18 +113,6 @@ var tps = {
 				tps.scene = newScene;
 			}
 		}
-	},
-
-	createGfxBuffer: function() {
-		var x = Math.floor(tps.screenWidth / 2);
-		var y = Math.floor(tps.screenHeight / 2);
-
-	    this.gfxBuffer = tps.game.add.bitmapData(tps.width, tps.height);
-	    this.gfxBuffer.addToWorld(x, y, 0.5, 0.5, this.scale, this.scale);
-
-	    // DEBUG
-	    this.gfxBuffer.ctx.fillStyle = "#00BBBB";
-	    this.gfxBuffer.ctx.fillRect(0, 0, tps.width, tps.height);
 	},
 
 	centerContent: function() {

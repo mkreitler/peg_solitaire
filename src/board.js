@@ -30,6 +30,7 @@ var Board = function (rows, game, gfx, emptyRow, emptyCol) {
 	this.width = 0;
 	this.height = 0;
 	this.boardGroup = this.game.add.group();
+	this.boardGroup.position.set(Math.round(game.canvas.width / 2), Math.round(game.canvas.height / 2));
 	this.moveStack = new tps.utils.Stack();
 	this.bestStack = new tps.utils.Stack();
 	this.undoStack = new tps.utils.Stack();
@@ -612,7 +613,7 @@ Board.prototype.deserialize = function(bitArray) {
 };
 
 // Rendering ------------------------------------------------------------------
-Board.prototype.draw = function(gfx, emptyRow, emptyCol) {
+Board.prototype.draw = function(gfx) {
 	var nodesInRow = [];
 	nodesInRow.push(this.rootNode);
 
@@ -645,6 +646,25 @@ Board.prototype.canvasDrawPegAtPoint = function(gfx, point) {
 	gfx.closePath();
 };
 
+Board.prototype.render =  function(gfx) {
+	var left = Math.round(this.boardGroup.position.x - this.width / 2);
+	var top = Math.round(this.boardGroup.position.y - this.height / 2);
+
+	gfx.strokeStyle = "blue";
+	gfx.beginPath();
+	gfx.rect(left, top, this.width, this.height);
+	gfx.stroke();
+	gfx.closePath();
+};
+
+Board.prototype.getWidth = function() {
+	return this.width;
+};
+
+Board.prototype.getHeight = function() {
+	return this.height;
+};
+
 // Building -------------------------------------------------------------------
 Board.prototype.build = function(emptyRow, emptyCol, gfx) {
 	var slotSprite = this.addSprite("slot_orange");
@@ -664,8 +684,10 @@ Board.prototype.build = function(emptyRow, emptyCol, gfx) {
 
 	this.addRow(1, nodesInRow, this.rows, gfx, emptyRow, emptyCol);
 
-	this.height = Math.floor(this.rows * (slotSprite.height + Board.PEG_SPACING));
+	this.height = Math.floor((this.rows + 1) * (slotSprite.height + Board.PEG_SPACING));
 	this.width = Math.floor(this.height);
+
+	this.boardGroup.position.y = Math.round(this.game.canvas.height / 2 - tps.height / 2 + this.height / 2);
 
 	return rootNode;
 };
@@ -684,7 +706,7 @@ Board.prototype.addRow = function(row, previousRow, rows, gfx, emptyRow, emptyCo
 	for (var i=0; i<previousRow.length; ++i) {
 		var point = tps.BoardNode.getScreenCoordsForPeg(row - 1, i, previousRow.length, this.rows, gfx.canvas.width, gfx.canvas.height);
 
-		previousRow[i].moveToScreen(point.x, point.y);
+		previousRow[i].moveToScreen(point.x - this.boardGroup.position.x, point.y - this.boardGroup.position.y);
 		previousRow[i].showSlot();
 
 		// While we are at it, build a flat list of nodes for ease of access.
