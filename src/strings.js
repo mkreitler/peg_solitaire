@@ -12,7 +12,7 @@
  		tt_button_music: "Press to toggle music.",
  		tt_button_sound: "Press to toggle sound.",
 
- 		instructions: "Object: jump green pegs until only 1 remains.\nMethod: Tap on a peg. Tap '?' for a hint.",
+ 		instructions: "Object: jump green pegs until only 1 remains.\nMethod: Tap on a peg. Tap '?' for a hint.\n\nPress 'Go!' to play.",
  	},
 
  	lookUp: function(key) {

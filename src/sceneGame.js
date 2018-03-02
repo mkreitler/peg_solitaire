@@ -26,8 +26,10 @@ tps.scenes.game = function(game) {
 	this.board.acceptInput(true);
 };
 
-tps.scenes.game.BUTTON_BAR_SCALAR		= 1 / 5;
-tps.scenes.game.BUTTONS 				= ["Play", "Hint*", "Undo*", "Redo*", "Music", "Sound"];
+tps.scenes.game.BUTTON_BAR_SCALAR			= 1 / 5;
+tps.scenes.game.CHAR_BUTTON_STARTS_INACTIVE	= "*";
+tps.scenes.game.CHAR_BUTTON_IS_TOGGLE		= "!";
+tps.scenes.game.BUTTONS 					= ["Play", "Hint*", "Undo*", "Redo*", "Music!", "Sound!"];
 
 // Message Handlers ///////////////////////////////////////////////////////////
 tps.scenes.game.prototype.moveStarted = function() {
@@ -249,12 +251,21 @@ tps.scenes.game.prototype.createButtons = function() {
 	var originY = Math.round(this.game.canvas.height / 2 + tps.height / 2 - buttonOffsetY);
 
 	for (var i=0; i<tps.scenes.game.BUTTONS.length; ++i) {
-		var deactivate = tps.scenes.game.BUTTONS[i].indexOf("*") >= 0;
-		var B = tps.scenes.game.BUTTONS[i].replace("*", "");
+		var deactivate = tps.scenes.game.BUTTONS[i].indexOf(tps.scenes.game.CHAR_BUTTON_STARTS_INACTIVE) >= 0;
+		var isToggle = tps.scenes.game.BUTTONS[i].indexOf(tps.scenes.game.CHAR_BUTTON_IS_TOGGLE) >= 0;
+		var B = tps.scenes.game.BUTTONS[i].replace(tps.scenes.game.CHAR_BUTTON_STARTS_INACTIVE, "");
+		B = B.replace(tps.scenes.game.CHAR_BUTTON_IS_TOGGLE, "");
+
 		var b = B.toLowerCase();
 		var buttonParams = {iconName: "icon_" + b, msgPressed: b + "Pressed", msgReleased: b + "Released", tooltipKey: "tt_button_" + b, owner: this, ownerKey: "button" + B};
 		this["button" + B] = null;
-		tps.switchboard.broadcast("createClickButton", buttonParams);
+
+		if (isToggle) {
+			tps.switchboard.broadcast("createToggleButton", buttonParams);
+		}
+		else {
+			tps.switchboard.broadcast("createClickButton", buttonParams);
+		}
 
 		var button = this["button" + B];
 		var x = Math.round(originX + buttonImage.width / 2 + i * (buttonImage.width + buttonSpacingX));

@@ -15,6 +15,7 @@ tps.Button = function(game, type, spriteButton, spriteIcon, downMessage, upMessa
 	this.downMessage = downMessage;
 	this.upMessage = upMessage;
 	this.tooltip = tooltip;
+	this.wantsUntoggle = false;
 
 	this.spriteButton.visible = true;
 	this.spriteIcon.visible = true;
@@ -125,7 +126,6 @@ tps.Button.prototype.clickStateUp = function() {
 		if (this.spriteButton.input.pointerDown(0) || this.spriteIcon.input.pointerDown(0)) {
 			this.setStyle(tps.Button.Style.DARK, tps.Button.IconStyle.DARK);
 			this.updateState = this.clickStateDown;
-
 			tps.switchboard.broadcast(this.downMessage, this);
 		}
 		else if (!this.game.input.activePointer.isDown) {
@@ -164,10 +164,61 @@ tps.Button.prototype.clickStateDown = function() {
 
 // Toggle button states -------------------------------------------------------
 tps.Button.prototype.toggleStateUp = function() {
+	if (this.spriteButton.input.pointerOver(0) || this.spriteIcon.input.pointerOver(0)) {
+		if (this.spriteButton.input.pointerDown(0) || this.spriteIcon.input.pointerDown(0)) {
+			this.setStyle(tps.Button.Style.DARK, tps.Button.IconStyle.DARK);
+			this.updateState = this.toggleWaitForRelease;
 
+			tps.switchboard.broadcast(this.downMessage, this);
+			this.wantsUntoggle = false;
+		}
+		else if (!this.game.input.activePointer.isDown) {
+			// Don't like spamming the broadcast channel every frame the pointer is over
+			// the button, but without this, it's possible to jump from one button to
+			// another quickly enough that the new buttons 'set' message beats the old
+			// buttons 'clear' message, resulting in a blank tooltip.		
+			this.setStyle(tps.Button.Style.NORMAL, tps.Button.IconStyle.LIT);
+			tps.switchboard.broadcast("setTooltip", this.tooltip);
+		}
+	}
+	else {
+		if (this.spriteIcon.frame === tps.Button.IconStyle.LIT) {
+			tps.switchboard.broadcast("clearTooltip");
+		}
+
+		if (!this.spriteButton.input.pointerDown(0) && !this.spriteIcon.input.pointerDown(0)) {
+			this.setStyle(tps.Button.Style.NORMAL, tps.Button.IconStyle.NORMAL)
+		}
+	}
+};
+
+tps.Button.prototype.toggleWaitForRelease = function() {
+	if (!this.game.input.activePointer.isDown) {
+		this.updateState = this.toggleStateDown;
+	}
 };
 
 tps.Button.prototype.toggleStateDown = function() {
+	if (this.spriteButton.input.pointerOver(0) || this.spriteIcon.input.pointerOver(0)) {
+		if (this.spriteButton.input.pointerDown(0) || this.spriteIcon.input.pointerDown(0)) {
+			this.wantsUntoggle = true;
+			tps.switchboard.broadcast("clearTooltip");
+		}
+	}
 
+	if (!this.game.input.activePointer.isDown) {
+		if (this.wantsUntoggle) {
+			if (this.spriteButton.input.pointerOver(0) || this.spriteIcon.input.pointerOver(0)) {
+				this.setStyle(tps.Button.Style.NORMAL, tps.Button.IconStyle.LIT);
+				tps.switchboard.broadcast("setTooltip", this.tooltip);
+			}
+			else {
+				this.setStyle(tps.Button.Style.NORMAL, tps.Button.IconStyle.NORMAL)
+			}
+
+			this.updateState = this.toggleStateUp;
+			this.wantsUntoggle = false;
+		}
+	}
 };
 

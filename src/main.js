@@ -48,6 +48,7 @@ var tps = {
 		tps.switchboard.listenFor('removeKeyAction', tps);
 		tps.switchboard.listenFor('loadScene', tps);
 		tps.switchboard.listenFor('createClickButton', tps);
+		tps.switchboard.listenFor('createToggleButton', tps);
 
 		// HACK: force an update of the switchboard so the above listeners will get
 		// added tright away.
@@ -95,6 +96,14 @@ var tps = {
 		tps.utils.assert(info && info.iconName && info.msgPressed && info.msgReleased && info.tooltipKey && info.owner && info.ownerKey, "(createClickButton) Invalid parameters!");
 
 		var button = new tps.Button(this.game, tps.Button.Type.CLICK, this.game.add.sprite(0, 0, "buttons"), this.game.add.sprite(0, 0, info.iconName), info.msgPressed, info.msgReleased, tps.strings.lookUp(info.tooltipKey));
+
+		info.owner[info.ownerKey] = button;
+	},
+
+	createToggleButton: function(info) {
+		tps.utils.assert(info && info.iconName && info.msgPressed && info.msgReleased && info.tooltipKey && info.owner && info.ownerKey, "(createClickButton) Invalid parameters!");
+
+		var button = new tps.Button(this.game, tps.Button.Type.TOGGLE, this.game.add.sprite(0, 0, "buttons"), this.game.add.sprite(0, 0, info.iconName), info.msgPressed, info.msgReleased, tps.strings.lookUp(info.tooltipKey));
 
 		info.owner[info.ownerKey] = button;
 	},
