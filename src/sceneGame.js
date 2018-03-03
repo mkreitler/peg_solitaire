@@ -11,6 +11,8 @@ tps.scenes.game = function(game) {
 	this.wantsNewGame = false;
 	this.isFirstGame = true;
 	this.wantsHint = false;
+	this.minCelebrationTime = tps.scenes.game.MIN_CELEBRATE_TIME;
+	this.maxCelebrationTime = tps.scenes.game.MAX_CELEBRATE_TIME;
 
 	tps.utils.assert(this.stateMachine, "(game constructor) Invalid state machine!");
 
@@ -43,6 +45,8 @@ tps.scenes.game.BUTTON_TEXTAREA_SCALAR		= 3 / 10;
 tps.scenes.game.CHAR_BUTTON_STARTS_INACTIVE	= "*";
 tps.scenes.game.CHAR_BUTTON_IS_TOGGLE		= "!";
 tps.scenes.game.BUTTONS 					= ["Play", "Hint*", "Undo*", "Redo*", "Music!", "Sound!"];
+tps.scenes.game.MIN_CELEBRATE_TIME 			= 0.25;
+tps.scenes.game.MAX_CELEBRATE_TIME 			= 0.4;
 
 // Message Handlers ///////////////////////////////////////////////////////////
 tps.scenes.game.prototype.onSolutionFound = function() {
@@ -106,13 +110,11 @@ tps.scenes.game.prototype.moveCompleted = function() {
 };
 
 tps.scenes.game.prototype.playerWon = function() {
-	console.log(">>> YOU WIN!!! <<<");
-	this.wantsNewGame = true;
+	this.stateMachine.transitionTo(this.statePlayerWon);
 };
 
 tps.scenes.game.prototype.playerLost = function() {
-	console.log("!!! YOU LOST !!!");
-	this.wantsNewGame = true;
+	this.stateMachine.transitionTo(this.statePlayerLost);
 };
 
 // States /////////////////////////////////////////////////////////////////////
@@ -184,21 +186,65 @@ tps.scenes.game.prototype.stateWaitForMoveFX = {
 	update: function() {
 		// TODO: wait for FX to run out.
 		if (!this.board.anyParticlesPlaying()) {
-			if (this.wantsNewGame) {
-				this.newGame();
+			if (this.stateMachine.locals().wantsRestart) {
+				this.restart();
 			}
 			else {
-				if (this.stateMachine.locals().wantsRestart) {
-					this.restart();
-				}
-				else {
-					this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
-				}
+				this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
 			}
 		}
 	},
 
 	exit: function() {
+	},
+};
+
+tps.scenes.game.prototype.statePlayerWon = {
+	locals: {
+		timer: 0,
+
+		getNextTime: function(minTime, maxTime) {
+			return minTime + Math.random() * (minTime - maxTime);
+		},
+	},
+
+	play: function() {
+		this.restart();
+	},
+
+	enter: function() {
+		var lostLine = tps.strings.lookUp("msg_won*");
+		var playAgain = tps.strings.lookUp("msg_tryAgain");
+		var locals = this.stateMachine.locals();
+
+		locals.timer = locals.getNextTime(this.minCelebrationTime, this.maxCelebrationTime);
+
+		this.resetButtons();
+		this.setMessage(lostLine + "\n"+ playAgain);
+	},
+
+	update: function() {
+		// TODO: randomly fire peg particles every 0.25 - 0.75 seconds.
+		var locals = this.stateMachine.locals();
+		locals.timer -= this.game.time.elapsedMS * 0.001;
+		if (locals.timer < 0) {
+			this.board.celebrate();
+			locals.timer = locals.getNextTime(this.minCelebrationTime, this.maxCelebrationTime);
+		}		
+	}
+};
+
+tps.scenes.game.prototype.statePlayerLost = {
+	play: function() {
+		this.restart();
+	},
+
+	enter: function() {
+		var lostLine = tps.strings.lookUp("msg_lost*");
+		var playAgain = tps.strings.lookUp("msg_tryAgain");
+
+		this.resetButtons();
+		this.setMessage(lostLine + "\n"+ playAgain);
 	},
 };
 

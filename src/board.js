@@ -47,6 +47,7 @@ var Board = function (rows, game, gfx, emptyRow, emptyCol) {
 	this.solverStack = new tps.utils.Stack();
 	this.hasSolutionToCurrentBoard = false;
 
+	this.celebrationNode = 0;
 	this.playingParticles = [];
 
 	this.replayStack 	= new tps.utils.Stack();
@@ -90,6 +91,7 @@ Board.prototype.undo = function() {
 		this.deserialize(this.undoStack.pop());
 		this.enableLivePegs();
 		this.hasSolutionToCurrentBoard = false;
+		tps.switchboard.broadcast("clearMessage");
 	}
 	else {
 		tps.switchboard.broadcast("setMessageUsingKey", "msg_cantUndo");
@@ -105,6 +107,7 @@ Board.prototype.redo = function() {
 		this.deserialize(this.redoStack.pop());
 		this.enableLivePegs();
 		this.hasSolutionToCurrentBoard = false;
+		tps.switchboard.broadcast("clearMessage");
 	}
 	else {
 		tps.switchboard.broadcast("setMessageUsingKey", "msg_cantRedo");
@@ -328,6 +331,26 @@ Board.prototype.reset = function() {
 	this.turnOffAllNodes();
 	this.fadeAllPegs();
 	this.hasSolutionToCurrentBoard = false;
+	this.celebrationNode = Math.floor(Math.random() * this.nodes.length);
+};
+
+Board.prototype.celebrate = function() {
+	var oldNode = this.celebrationNode;
+
+	var newNode = oldNode;
+	while (newNode === oldNode) {
+		newNode = Math.floor(Math.random() * this.nodes.length / 2);
+		if (Math.random() < 0.5) {
+			newNode += Math.floor(this.nodes.length / 2);
+		}
+	}
+
+	this.celebrationNode = newNode;
+
+	var pegParticle = tps.objectPool.request("pegParticle");
+	tps.utils.assert(pegParticle, "(celebrate) Invalid pegParticle!");
+	var position = this.nodes[newNode].getPosition();
+	pegParticle.play(position.x, position.y);
 };
 
 Board.prototype.clearStacks = function(preserveUndo) {
