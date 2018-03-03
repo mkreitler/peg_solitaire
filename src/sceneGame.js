@@ -346,8 +346,14 @@ tps.scenes.game.prototype.stateWaitForPlayerFinishMove = {
 	},
 
 	update: function() {
-		this.board.pulseSelection();
-		this.board.checkForMoveCompletion();
+		if (this.wantsHint) {
+			this.board.abortCurrentMove();
+			this.stateMachine.transitionTo(this.stateComputeSolution);
+		}
+		else {
+			this.board.pulseSelection();
+			this.board.checkForMoveCompletion();
+		}
 	},
 
 	exit: function() {
