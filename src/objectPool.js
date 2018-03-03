@@ -50,21 +50,22 @@ tps.ObjectPool.prototype.request = function(typeName) {
 	typeName = this.validateTypeName(typeName, "ObjectPool.request");
 
 	var poolObj = null;
-	var objInfo = this.poolInfo[typeName];
+	var pool = this.poolInfo[typeName];
 
-	tps.utils.assert(objInfo, "(ObjectPool.request) Unknown type!");
+	tps.utils.assert(pool, "(ObjectPool.request) Unknown type!");
 
-	if (objInfo) {
-		if (objInfo.available.length === 0) {
-			poolObj = new objInfo.ctor();
+	if (pool) {
+		if (pool.available.length === 0) {
+			poolObj = new pool.ctor();
 		}
 		else {
-			poolObj = objInfo.available[0];
-			objInfo.available.shift();
+			poolObj = pool.available[0];
+			pool.available.shift();
 		}
 
 		if (poolObj) {
-			objInfo.used.push(poolObj);
+			tps.utils.assert(pool.used.indexOf(poolObj) === -1, "(ObjectPool.request) duplicate element in 'available' array!");
+			pool.used.push(poolObj);
 		}
 	}
 
@@ -72,21 +73,17 @@ tps.ObjectPool.prototype.request = function(typeName) {
 		poolObj.reset();
 	}
 
-	if (poolObj.special && poolObj.special === "hintParticle") {
-		console.log("Hint particle!");
-	}
-
 	return poolObj;
 };
 
-tps.ObjectPool.prototype.release = function(typeName, poolObj) {
+tps.ObjectPool.prototype.release = function(typeName, poolObj, releaseNumber) {
 	if (poolObj) {
 		var objArray = [];
 
 		typeName = this.validateTypeName(typeName, "ObjectPool.release");
 
-		var objInfo = this.poolInfo[typeName];
-		tps.utils.assert(objInfo, "(ObjectPool.release) unknown type " + typeName + "!");
+		var pool = this.poolInfo[typeName];
+		tps.utils.assert(pool, "(ObjectPool.release) unknown type " + typeName + "!");
 
 		// Often, pool objects will be contained in arrays. If we
 		// receive a single instance, we'll wrap it in an array to
@@ -101,22 +98,28 @@ tps.ObjectPool.prototype.release = function(typeName, poolObj) {
 		for (var i=0; i<poolObj.length; ++i) {
 			// This call to removeElementFromArray assumes that the order
 			// of pool objects in the 'used' array doesn't matter.
-			tps.utils.removeElementFromArray(poolObj[i], objInfo.used);
-			objInfo.available.push(poolObj[i]);
+			tps.utils.removeElementFromArray(poolObj[i], pool.used);
+
+			tps.utils.assert(pool.available.indexOf(poolObj[i]) === -1, "(ObjectPool.release) duplicate element in 'available' array!");
+			poolObj[i].lastRelease = releaseNumber;
+			pool.available.push(poolObj[i]);
 		}
 	}
 };
 
-tps.ObjectPool.prototype.releaseAll = function(typeName) {
+tps.ObjectPool.prototype.releaseAll = function(typeName, releaseNumber) {
 	typeName = this.validateTypeName(typeName, "ObjectPool.releaseAll");
 
-	var objInfo = this.poolInfo[typeName];
-	tps.utils.assert(objInfo, "(ObjectPool.releaseAll) unknown type!");
+	var pool = this.poolInfo[typeName];
+	tps.utils.assert(pool, "(ObjectPool.releaseAll) unknown type!");
 
-	while (objInfo.used.length > 0) {
-		var poolObj = objInfo.used[0];
-		objInfo.available.push(poolObj);
-		objInfo.used.shift();
+	while (pool.used.length > 0) {
+		var poolObj = pool.used[0];
+
+		tps.utils.assert(pool.available.indexOf(poolObj) === -1, "(ObjectPool.releaseAll) duplicate element in 'available' array!");
+		poolObj.lastRelease = releaseNumber;
+		pool.available.push(poolObj);
+		pool.used.shift();
 	}
 };
 

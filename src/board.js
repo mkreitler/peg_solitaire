@@ -90,8 +90,14 @@ Board.prototype.undo = function() {
 		// Restore the previous board.
 		this.deserialize(this.undoStack.pop());
 		this.enableLivePegs();
+		this.hideAllTargets();
 		this.hasSolutionToCurrentBoard = false;
 		tps.switchboard.broadcast("clearMessage");
+		tps.switchboard.broadcast("moveCompleted");
+
+		if (this.selectedMoves) {
+			this.clearMove()
+		}
 	}
 	else {
 		tps.switchboard.broadcast("setMessageUsingKey", "msg_cantUndo");
@@ -106,8 +112,14 @@ Board.prototype.redo = function() {
 		// Restore previous board.
 		this.deserialize(this.redoStack.pop());
 		this.enableLivePegs();
+		this.hideAllTargets();
 		this.hasSolutionToCurrentBoard = false;
 		tps.switchboard.broadcast("clearMessage");
+		tps.switchboard.broadcast("moveCompleted");
+
+		if (this.selectedMoves) {
+			this.clearMove()
+		}
 	}
 	else {
 		tps.switchboard.broadcast("setMessageUsingKey", "msg_cantRedo");
@@ -129,6 +141,12 @@ Board.prototype.unfadeAllPegs = function() {
 Board.prototype.turnOffAllNodes = function() {
 	for (var i=0; i<this.nodes.length; ++i) {
 		this.nodes[i].acceptInput(false);
+	}
+};
+
+Board.prototype.hideAllTargets = function() {
+	for (var i=0; i<this.nodes.length; ++i) {
+		this.nodes[i].hideTarget();
 	}
 };
 
@@ -260,7 +278,7 @@ Board.prototype.movePeg = function(move) {
 };
 
 Board.prototype.releaseMoves = function(moveList) {
-	tps.objectPool.release("moveTracker", moveList);
+	tps.objectPool.release("moveTracker", moveList, 263);
 };
 
 Board.prototype.canSelectedPieceJump = function() {
@@ -324,7 +342,7 @@ Board.prototype.acceptInput = function(doAccept) {
 Board.prototype.reset = function() {
 	this.clearStacks();
 	this.deserialize(Math.pow(2, this.rows * (this.rows + 1) / 2) - 2);
-	tps.objectPool.releaseAll("moveTracker");
+	tps.objectPool.releaseAll("moveTracker", 327);
 	tps.objectPool.releaseAll("solutionTracker");
 	this.turnOffAllNodes();
 	this.fadeAllPegs();
@@ -478,6 +496,7 @@ Board.prototype.updateSolution = function() {
 		for (/* no init */; !recurse && st.iNode<this.nodes.length; ++st.iNode) {
 			if (!this.nodes[st.iNode].isEmpty()) {
 
+				tps.objectPool.release("moveTracker", st.moves, 481);
 				st.moves = this.findMovesForNode(st.iNode);
 				if (st.moves) {
 
@@ -496,8 +515,6 @@ Board.prototype.updateSolution = function() {
 						this.deserialize(currentBoard);
 						this.DEBUG_allMoves.push(currentBoard);
 					}
-
-					tps.objectPool.release("moveTracker", st.moves);
 				}
 				else {
 					// No moves remaining for this node.
@@ -511,8 +528,10 @@ Board.prototype.updateSolution = function() {
 			// return the board to the previous configuration, and pick up the
 			// analysis at that level.
 			st = this.solverStack.pop();
-			tps.objectPool.release("moveTracker", st.moves);
+			tps.objectPool.release("moveTracker", st.moves, 516);
 			tps.objectPool.release("solutionTracker", st);
+
+			tps.utils.assert(st !== this.solverStack.peek(), "(DEBUG) Double stack entry!");
 
 			st = this.solverStack.peek();
 
@@ -527,7 +546,6 @@ Board.prototype.updateSolution = function() {
 					if (st.iMove === st.moves.length) {
 						st.iNode += 1;
 						st.iMove = 0;
-						tps.objectPool.release("moveTracker", st.moves);
 					}
 
 					st.wantsUndo = false;
@@ -537,7 +555,7 @@ Board.prototype.updateSolution = function() {
 				this.wantsSolution = false;
 				this.solverStack.clear();
 
-				tps.objectPool.releaseAll("moveTracker");
+				tps.objectPool.releaseAll("moveTracker", 544);
 				tps.objectPool.releaseAll("solutionTracker");
 
 				this.bringPegsToFront();
@@ -590,7 +608,7 @@ Board.prototype.playerHasLost = function() {
 			var moves = this.findMovesForNode(this.nodes[i].getIndex());
 
 			if (moves) {
-				tps.objectPool.release("moveTracker", moves);
+				tps.objectPool.release("moveTracker", moves, 597);
 				playerLost = false;
 				break;
 			}
