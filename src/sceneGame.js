@@ -13,6 +13,8 @@ tps.scenes.game = function(game) {
 	this.wantsHint = false;
 	this.minCelebrationTime = tps.scenes.game.MIN_CELEBRATE_TIME;
 	this.maxCelebrationTime = tps.scenes.game.MAX_CELEBRATE_TIME;
+	this.hintParticle = null;
+	this.fnSolutionExit = null;
 
 	tps.utils.assert(this.stateMachine, "(game constructor) Invalid state machine!");
 
@@ -48,8 +50,11 @@ tps.scenes.game.BUTTONS 					= ["Play", "Hint*", "Undo*", "Redo*", "Music!", "So
 tps.scenes.game.MIN_CELEBRATE_TIME 			= 0.25;
 tps.scenes.game.MAX_CELEBRATE_TIME 			= 0.4;
 
+tps.scenes.game.prototype.HINT_DELAY		= 1.0;
+tps.scenes.game.prototype.MIN_SOLUTION_TIME	= 0.5;
+
 // Message Handlers ///////////////////////////////////////////////////////////
-tps.scenes.game.prototype.onSolutionFound = function() {
+tps.scenes.game.prototype.exitSolutionFound = function() {
 	this.setMessageUsingKey("msg_tryHint*");
 	this.removeSpinner();
 	this.enableAllButtons();
@@ -58,11 +63,19 @@ tps.scenes.game.prototype.onSolutionFound = function() {
 	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
 };
 
-tps.scenes.game.prototype.onNoSolutionFound = function() {
+tps.scenes.game.prototype.exitNoSolutionFound = function() {
 	this.removeSpinner();
 	this.enableAllButtons();
 	this.setMessageUsingKey("msg_undoMoves*");
 	this.stateMachine.transitionTo(this.stateWaitForPlayerMove);
+};
+
+tps.scenes.game.prototype.onSolutionFound = function() {
+	this.fnSolutionExit = this.exitSolutionFound.bind(this);
+};
+
+tps.scenes.game.prototype.onNoSolutionFound = function() {
+	this.fnSolutionExit = this.exitNoSolutionFound.bind(this);
 };
 
 tps.scenes.game.prototype.playReleased = function() {
@@ -82,19 +95,19 @@ tps.scenes.game.prototype.redoReleased = function() {
 };
 
 tps.scenes.game.prototype.musicPressed = function() {
-	// TODO: turn off music.
+	tps.switchboard.broadcast("muteMusic");
 };
 
 tps.scenes.game.prototype.musicReleased = function() {
-	// TODO: turn on music.
+	tps.switchboard.broadcast("unmuteMusic");
 };
 
 tps.scenes.game.prototype.soundPressed = function() {
-	// TODO: turn off sound.
+	tps.switchboard.broadcast("muteSound");
 };
 
 tps.scenes.game.prototype.soundReleased = function() {
-	// TODO: turn on sound.
+	tps.switchboard.broadcast("unmuteSound");
 };
 
 tps.scenes.game.prototype.moveStarted = function() {
@@ -147,13 +160,21 @@ tps.scenes.game.prototype.stateWaitingForGameStart = {
 		if (this.isFirstGame) {
 			var locals = this.stateMachine.locals();
 			tps.utils.assert(locals, "(stateWaitingForGameStart) Invalid locals!");
-			locals.timer = 0;
+			locals.timer = this.HINT_DELAY;
+			this.hintParticle = tps.objectPool.request("hintParticle");
 		}
 	},
 
 	update: function() {
 		if (this.isFirstGame) {
-			// TODO: play the hint particle on the "Go!" button.
+			var locals = this.stateMachine.locals();
+			locals.timer -= this.game.time.elapsedMS * 0.001;
+
+			if (locals.timer < 0 && !this.hintParticle.isPlaying()) {
+				this.hintParticle.play(this.buttons[0].getX(), this.buttons[0].getY());
+				locals.timer += this.HINT_DELAY;
+				tps.switchboard.broadcast("playSound", "future02");
+			}
 		}
 	},
 
@@ -249,13 +270,30 @@ tps.scenes.game.prototype.statePlayerLost = {
 };
 
 tps.scenes.game.prototype.stateComputeSolution = {
+	locals: {
+		timer: 0,
+	},
+
 	enter: function() {
+		this.stateMachine.locals().timer = 0;
+
+		this.fnSolutionExit = null;
 		tps.switchboard.listenFor("onSolutionFound", this);
 		tps.switchboard.listenFor("onNoSolutionFound", this);
 
 		this.disableAllButtons();
 		this.board.solve();
 		this.addSpinner();
+	},
+
+	update: function() {
+		var locals = this.stateMachine.locals();
+
+		locals.timer += this.game.time.elapsedMS * 0.001;
+
+		if (this.fnSolutionExit && locals.timer > this.MIN_SOLUTION_TIME) {
+			this.fnSolutionExit();
+		}
 	},
 
 	exit: function() {
@@ -362,6 +400,7 @@ tps.scenes.game.prototype.end = function() {
 
 tps.scenes.game.prototype.update = function() {
 	this.board.gameUpdate();
+	this.hintParticle.update();
 
 	for (var i=0; i<this.buttons.length; ++i) {
 		this.buttons[i].update();
@@ -421,6 +460,26 @@ tps.scenes.game.prototype.initUi = function(boardWidth, boardHeight) {
 	this.createTooltip();
 	this.createButtons();
 	this.createSpinner();
+	this.createHintParticle();
+};
+
+tps.scenes.game.prototype.createHintParticle = function() {
+	tps.objectPool.register("hintParticle", tps.PegParticle, 1);
+	var sprites = [];
+	for (var j=0; j<Board.DEFAULT_NUM_PP_SPRITES; ++j) {
+		var sprite = this.game.add.sprite(0, 0, "hint_particle");
+		sprites.push(sprite);
+	}
+
+	this.hintParticle = tps.objectPool.request("hintParticle");
+
+	// FILTHY HACK to prevent the hintParticle from cross-contaminating the
+	// peg particles.
+	this.hintParticle.special = true;
+
+	tps.utils.assert(this.hintParticle, "(createHintParticle) Creation failed!");
+	this.hintParticle.init(this.game, Board.PP_LIFETIME, Board.PP_MIN_SCALE, Board.PP_MAX_SCALE, Board.PP_EMIT_TIME, sprites);
+	tps.objectPool.releaseAll("hintParticle");
 };
 
 tps.scenes.game.prototype.createSpinner = function() {

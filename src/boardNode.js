@@ -151,6 +151,10 @@ tps.BoardNode.prototype.getPegSprite = function() {
 	return this.spritePeg;
 };
 
+tps.BoardNode.prototype.getTargetSprite = function() {
+	return this.spriteTarget;
+};
+
 tps.BoardNode.prototype.acceptInput = function(doAccept) {
 	this.spriteSlot.inputEnabled = doAccept;
 };

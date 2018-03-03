@@ -51,6 +51,10 @@ tps.PegParticle.prototype.update = function() {
 	}
 };
 
+tps.PegParticle.prototype.isPlaying = function() {
+	return this.updateState === this.isPlaying;
+};
+
 tps.PegParticle.prototype.playing = function() {
 	var oldTimer = this.timer;
 	var numExpired = 0;

@@ -17,6 +17,7 @@ var tps = {
 	    tps.game.load.image('spinner', 			'./res/bitmaps/spinner.png',		70, 70);
 	    tps.game.load.image('target_ring', 		'./res/bitmaps/target_ring.png',	80, 80);
 	    tps.game.load.image('peg_particle', 	'./res/bitmaps/peg_particle.png',	55, 55);
+	    tps.game.load.image('hint_particle', 	'./res/bitmaps/particle_hint.png',	55, 55);
 
 	    tps.game.load.spritesheet('buttons', 	'./res/bitmaps/buttons.png',		90, 90);
 	    tps.game.load.spritesheet('icon_hint',	'./res/bitmaps/icon_hint.png',		30, 54);
@@ -26,8 +27,14 @@ var tps = {
 	    tps.game.load.spritesheet('icon_undo',	'./res/bitmaps/icon_undo.png', 		53, 47);
 	    tps.game.load.spritesheet('icon_redo',	'./res/bitmaps/icon_redo.png', 		53, 47);
 
-	    tps.game.load.bitmapFont('maian_72_blue', 	'./res/fonts/font_blue.png', './res/fonts/font_blue.fnt');
-	    tps.game.load.bitmapFont('maian_72', 		'./res/fonts/font.png', './res/fonts/font.fnt');
+	    tps.game.load.bitmapFont('maian_72_blue','./res/fonts/font_blue.png', './res/fonts/font_blue.fnt');
+	    tps.game.load.bitmapFont('maian_72', 	'./res/fonts/font.png', './res/fonts/font.fnt');
+
+		tps.game.load.audio('crystal_hunter',		'./res/audio/crystal_hunter.mp3');	    
+		tps.game.load.audio('button_click_res',		'./res/audio/click.wav');
+		tps.game.load.audio('button_toggle_res',	'./res/audio/toggle.wav');
+		tps.game.load.audio('future_01_res',		'./res/audio/future01.wav');	    
+		tps.game.load.audio('future_02_res',		'./res/audio/future02.wav');
 	},
 
 	create: function() {
@@ -50,6 +57,18 @@ var tps = {
 		tps.switchboard.listenFor('loadScene', tps);
 		tps.switchboard.listenFor('createClickButton', tps);
 		tps.switchboard.listenFor('createToggleButton', tps);
+		tps.switchboard.listenFor('buttonClickUp', tps);
+		tps.switchboard.listenFor('buttonClickDown', tps);
+		tps.switchboard.listenFor('buttonToggleUp', tps);
+		tps.switchboard.listenFor('buttonToggleDown', tps);
+
+		tps.soundModule = new tps.soundManager(tps.game);
+		tps.soundModule.setMusic("crystal_hunter", true);
+		tps.soundModule.addSound("button_click", "button_click_res");
+		tps.soundModule.addSound("button_toggle", "button_toggle_res");
+		tps.soundModule.addSound("button_toggle", "button_toggle_res");
+		tps.soundModule.addSound("future01", "future_01_res");
+		tps.soundModule.addSound("future02", "future_02_res");
 
 		// HACK: force an update of the switchboard so the above listeners will get
 		// added tright away.
@@ -64,6 +83,22 @@ var tps = {
 		tps.startScene(tps.scenes.game);
 
 		tps.centerContent();
+	},
+
+	buttonClickUp: function() {
+		// this.soundModule.playSound("button_click");
+	},
+
+	buttonClickDown: function() {
+		this.soundModule.playSound("button_click");
+	},
+
+	buttonToggleUp: function() {
+		this.soundModule.playSound("button_toggle");
+	},
+
+	buttonToggleDown: function() {
+		this.soundModule.playSound("button_toggle");
 	},
 
 	update :function() {

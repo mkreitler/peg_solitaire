@@ -77,6 +77,14 @@ tps.Button.prototype.getData = function(iconData) {
 	return !iconData ? this.spriteButton.data : this.spriteIcon.data;
 };
 
+tps.Button.prototype.getX = function() {
+	return this.spriteButton.world.x;
+};
+
+tps.Button.prototype.getY = function() {
+	return this.spriteButton.world.y;
+};
+
 tps.Button.prototype.setData = function(data, iconData) {
 	if (iconData) {
 		this.spriteIcon.data = data;

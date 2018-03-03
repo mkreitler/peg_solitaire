@@ -72,6 +72,10 @@ tps.ObjectPool.prototype.request = function(typeName) {
 		poolObj.reset();
 	}
 
+	if (poolObj.special && poolObj.special === "hintParticle") {
+		console.log("Hint particle!");
+	}
+
 	return poolObj;
 };
 

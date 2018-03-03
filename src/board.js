@@ -247,7 +247,7 @@ Board.prototype.movePeg = function(move) {
 	this.redoStack.clear();
 	this.hasSolutionToCurrentBoard = false;
 
-	// TODO: play a sound and particle effect.
+	tps.switchboard.broadcast("playSound", "future01");
 
 	this.selectedNode.scalePeg(1.0);
 
@@ -257,8 +257,6 @@ Board.prototype.movePeg = function(move) {
 	}
 
 	this.clearMove();
-
-	// TODO: check for victory.
 };
 
 Board.prototype.releaseMoves = function(moveList) {
@@ -366,12 +364,16 @@ Board.prototype.clearStacks = function(preserveUndo) {
 };
 
 Board.prototype.pegParticleStart = function(particle) {
-	this.playingParticles.push(particle);
+	if (!particle.special) {
+		this.playingParticles.push(particle);
+	}
 };
 
 Board.prototype.pegParticleStop = function(particle) {
-	tps.objectPool.release("pegParticle", particle);
-	tps.utils.removeElementFromArray(particle, this.playingParticles);
+	if (!particle.special) {
+		tps.objectPool.release("pegParticle", particle);
+		tps.utils.removeElementFromArray(particle, this.playingParticles);
+	}
 };
 
 Board.prototype.anyParticlesPlaying = function() {
@@ -734,6 +736,7 @@ Board.prototype.bringSlotsToFront = function() {
 Board.prototype.bringPegsToFront = function() {
 	for (var i=0; i<this.nodes.length; ++i) {
 		this.boardGroup.bringToTop(this.nodes[i].getPegSprite());
+		this.boardGroup.bringToTop(this.nodes[i].getTargetSprite());
 	}
 };
 
